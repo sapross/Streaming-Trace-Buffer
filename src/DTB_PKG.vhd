@@ -7,7 +7,7 @@
 -- Author     : Stephan Proß <s.pross@stud.uni-heidelberg.de>
 -- Company    :
 -- Created    : 2022-09-13
--- Last update: 2022-11-08
+-- Last update: 2022-11-09
 -- Platform   :
 -- Standard   : VHDL'08
 -------------------------------------------------------------------------------
@@ -29,14 +29,13 @@ package dtb_pkg is
 
   -- Ideally keep all values as a power of two.
   -- Write/Read width of the trace buffer.
-  constant TRB_WIDTH     : natural := 8;
+  constant TRB_WIDTH : natural := 8;
   -- Number of words buffer can contain.
-  constant TRB_DEPTH     : natural := 8;
+  constant TRB_DEPTH : natural := 8;
   -- Number of bits required to address all words.
   constant TRB_ADDR_BITS : natural := 3;
   -- Total number of bits stored in buffer.
-  constant TRB_BITS      : natural := TRB_WIDTH*TRB_DEPTH;
-
+  constant TRB_BITS : natural := TRB_WIDTH * TRB_DEPTH;
 
   constant REG_BITS    : natural := 16;
   constant CONFIG_BITS : natural := 6 + TRB_ADDR_BITS;
@@ -54,9 +53,19 @@ package dtb_pkg is
     sys_addr : std_logic_vector(TRB_ADDR_BITS - 1 downto 0);
   end record;
 
-  function stl_to_config (value : std_logic_vector(CONFIG_BITS - 1 downto 0)) return config_t;
+  constant CONFIG_DEFAULT : config_t
+ 
+ :=(
+     reset => "0",
+     enable => "0",
+     te_mode => "0",
+     timer_stop => (others => '1'),
+     sys_addr => (others => '0')
+   );
 
-  function config_to_stl (config : config_t) return std_logic_vector;
+  function slv_to_config (value : std_logic_vector(CONFIG_BITS - 1 downto 0)) return config_t;
+
+  function config_to_slv (config : config_t) return std_logic_vector;
 
   constant STATUS_BITS : natural := 1;
 
@@ -66,15 +75,15 @@ package dtb_pkg is
 
   end record;
 
-  function status_to_stl (status : status_t) return std_logic_vector;
+  function status_to_slv (status : status_t) return std_logic_vector;
 
-  function stl_to_status (value : std_logic_vector) return status_t;
+  function slv_to_status (value : std_logic_vector(STATUS_BITS - 1 downto 0)) return status_t;
 
 end package dtb_pkg;
 
 package body dtb_pkg is
 
-  function config_to_stl (config : config_t) return std_logic_vector is
+  function config_to_slv (config : config_t) return std_logic_vector is
   begin
 
     return config.reset &
@@ -83,27 +92,35 @@ package body dtb_pkg is
       config.timer_stop &
       config.sys_addr;
 
-  end function config_to_stl;
+  end function config_to_slv;
 
-  function stl_to_config (value : std_logic_vector(CONFIG_BITS - 1 downto 0)) return config_t is
+  function slv_to_config (value : std_logic_vector(CONFIG_BITS - 1 downto 0)) return config_t is
   begin
 
     return (
-      reset => value( 0 downto 0),
-      enable => value( 0 downto 0),
-      te_mode => value(0 downto 0),
-      timer_stop => value(2 downto 0),
+      reset => value(TRB_ADDR_BITS + 5 downto TRB_ADDR_BITS + 5),
+      enable => value(TRB_ADDR_BITS + 4 downto TRB_ADDR_BITS + 4),
+      te_mode => value(TRB_ADDR_BITS + 3 downto TRB_ADDR_BITS + 3),
+      timer_stop => value(TRB_ADDR_BITS + 2 downto TRB_ADDR_BITS),
       sys_addr => value(TRB_ADDR_BITS - 1  downto 0)
       );
 
   end function;
 
-  function status_to_stl (status : status_t) return std_logic_vector is
+  function status_to_slv (status : status_t) return std_logic_vector is
   begin
 
     return status.tr_hit;
 
-  end function status_to_stl;
+  end function status_to_slv;
 
+  function slv_to_status (value : std_logic_vector(STATUS_BITS - 1 downto 0)) return status_t is
+  begin
+
+    return (
+      tr_hit => value(0 downto 0)
+      );
+
+  end function;
 
 end package body dtb_pkg;

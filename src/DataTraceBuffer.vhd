@@ -48,7 +48,7 @@ entity DataTraceBuffer is
     FPGA_CLK         : in std_logic;
     FPGA_TE          : in std_logic;
     FPGA_TRACE       : in std_logic;
-    FGPA_DOUT        : out std_logic;
+    FGPA_DOUT        : out std_logic
 
 
   );
@@ -56,7 +56,7 @@ end entity DataTraceBuffer;
 
 architecture BEHAVIORAL of DataTraceBuffer is
 
-  signal memory_t is array(0 to TRACEBUFFER_DEPTH-1) of std_logic_vector(TRACEBUFFER_WIDTH-1 downto 0);
+  type memory_t is array(0 to TRACEBUFFER_DEPTH-1) of std_logic_vector(TRACEBUFFER_WIDTH-1 downto 0);
   signal memory : memory_t;
 
 begin
