@@ -89,14 +89,22 @@ begin
 
     if rising_edge(FPGA_CLK_I) then
       if (config.reset = "1") then
-        sticky_trigger <= '0';
+        sticky_trigger    <= '0';
+        status.event_pos  <= (others => '0');
+        status.event_addr <= (others => '0');
       else
         if (config.te_mode = "0") then
-          if (FPGA_TE_I = '1' or sticky_trigger = '1') then
-            sticky_trigger <= '1';
+          if (FPGA_TE_I = '1' and  sticky_trigger = '0') then
+            status.event_pos  <= std_logic_vector(to_unsigned(addr_low, TRB_WIDTH_BITS));
+            status.event_addr <= std_logic_vector(to_unsigned(addr_high_prev, TRB_ADDR_BITS));
+            sticky_trigger    <= '1';
           end if;
         else
           sticky_trigger <= FPGA_TE_I;
+          if (FPGA_TE_I = '1') then
+            status.event_pos  <= std_logic_vector(to_unsigned(addr_low, TRB_WIDTH_BITS));
+            status.event_addr <= std_logic_vector(to_unsigned(addr_high, TRB_ADDR_BITS));
+          end if;
         end if;
       end if;
     end if;
@@ -115,9 +123,13 @@ begin
         status.tr_hit <= "0";
       else
         if (FPGA_TE_I = '1' or sticky_trigger = '1') then
-          -- Increment timer until the value of timer_stop shifted by the
-          -- word length is reached.
-          if (timer < (to_integer(unsigned(config.timer_stop)) * TRB_BITS) / ((2 ** config.timer_stop'length) - 1) - 1) then
+          -- Formular for the limit L:
+          -- Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
+          -- L = (n+1)/N * P
+          -- Example: Trace Buffer can hold 64 bits (P = 64), timer_stop is 3
+          -- bits (N = 8 => 0<n<8) and timer_stop is set to "011" (n=3):
+          -- L = (3 + 1)/ 8 * 64 = 32
+          if (timer < ((to_integer(unsigned(config.timer_stop)) + 1) * TRB_BITS) / ((2 ** config.timer_stop'length)) - 1) then
             timer <= timer + 1;
           else
             pointer_inc   <= '0';
@@ -138,12 +150,12 @@ begin
         -- Since the write happens one cycle after addr_high is incremented,
         -- addr_high needs to be initialized with ones to start filling the
         -- bram at address zero.
-        addr_high   <= 0;
-        addr_high_prev   <= TRB_DEPTH - 1;
-        WE_O        <= '0';
-        DATA_O      <= (others => '0');
-        trace_reg   <= (others => '0');
-        FPGA_DOUT_O <= '0';
+        addr_high      <= 0;
+        addr_high_prev <= TRB_DEPTH - 1;
+        WE_O           <= '0';
+        DATA_O         <= (others => '0');
+        trace_reg      <= (others => '0');
+        FPGA_DOUT_O    <= '0';
       else
         if (pointer_inc = '1') then
           trace_reg(addr_low) <= FPGA_TRACE_I;

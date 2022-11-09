@@ -24,21 +24,22 @@
 library IEEE;
   use IEEE.STD_LOGIC_1164.ALL;
   use IEEE.NUMERIC_STD.ALL;
+  use IEEE.math_real.ALL;
 
 package dtb_pkg is
 
   -- Ideally keep all values as a power of two.
   -- Write/Read width of the trace buffer.
   constant TRB_WIDTH : natural := 8;
+  -- Number of bits required to iterate over TRB_WIDTH
+  constant TRB_WIDTH_BITS : natural := natural(ceil(log2(real(TRB_WIDTH))));
   -- Number of words buffer can contain.
   constant TRB_DEPTH : natural := 8;
   -- Number of bits required to address all words.
-  constant TRB_ADDR_BITS : natural := 3;
+  constant TRB_ADDR_BITS : natural := natural(ceil(log2(real(TRB_DEPTH))));
   -- Total number of bits stored in buffer.
   constant TRB_BITS : natural := TRB_WIDTH * TRB_DEPTH;
 
-  constant REG_BITS    : natural := 16;
-  constant CONFIG_BITS : natural := 6 + TRB_ADDR_BITS;
 
   type config_t is record
     -- Reset trigger logic.
@@ -53,8 +54,8 @@ package dtb_pkg is
     sys_addr : std_logic_vector(TRB_ADDR_BITS - 1 downto 0);
   end record;
 
+  constant CONFIG_BITS : natural := 6 + TRB_ADDR_BITS;
   constant CONFIG_DEFAULT : config_t
- 
  :=(
      reset => "0",
      enable => "0",
@@ -67,13 +68,25 @@ package dtb_pkg is
 
   function config_to_slv (config : config_t) return std_logic_vector;
 
-  constant STATUS_BITS : natural := 1;
 
   type status_t is record
     -- Has the trigger been hit?
     tr_hit : std_logic_vector(0 downto 0);
-
+    -- Bit corresponding to the trigger event.
+    event_pos : std_logic_vector(TRB_WIDTH_BITS-1 downto 0);
+    -- Byte address containing the event.
+    event_addr : std_logic_vector(TRB_ADDR_BITS-1 downto 0);
   end record;
+
+  constant STATUS_BITS : natural := 1 + TRB_WIDTH_BITS + TRB_ADDR_BITS;
+  constant STATUS_DEFAULT : status_t
+ :=(
+     tr_hit => "0",
+     event_pos => (others => '0'),
+     event_addr => (others => '0')
+   );
+
+
 
   function status_to_slv (status : status_t) return std_logic_vector;
 
@@ -110,7 +123,7 @@ package body dtb_pkg is
   function status_to_slv (status : status_t) return std_logic_vector is
   begin
 
-    return status.tr_hit;
+    return status.tr_hit & status.event_pos & status.event_addr;
 
   end function status_to_slv;
 
@@ -118,7 +131,9 @@ package body dtb_pkg is
   begin
 
     return (
-      tr_hit => value(0 downto 0)
+      event_addr => value(TRB_ADDR_BITS -1 downto 0),
+      event_pos => value(TRB_WIDTH_BITS+TRB_WIDTH_BITS-1 downto TRB_ADDR_BITS),
+      tr_hit => value(TRB_WIDTH_BITS+TRB_WIDTH_BITS downto TRB_WIDTH_BITS+TRB_WIDTH_BITS)
       );
 
   end function;

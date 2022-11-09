@@ -22,13 +22,13 @@ end entity TB_FPGATRACEBUFFER;
 
 architecture TB of TB_FPGATRACEBUFFER is
 
-  constant CLK_RATE                : integer := 100 * 10 ** 6;   -- Hz
-  constant CLK_PERIOD              : time    := 10 ns;           -- ns;
+  constant CLK_PERIOD              : time    := 1 ns;           -- ns;
 
   signal config_slv                : std_logic_vector(CONFIG_BITS - 1 downto 0);
   signal config                    : config_t;
 
-  signal status                    : std_logic_vector(STATUS_BITS - 1 downto  0);
+  signal status_slv                : std_logic_vector(STATUS_BITS - 1 downto  0);
+  signal status : status_t;
   signal read_addr                 : std_logic_vector(TRB_ADDR_BITS - 1 downto 0);
   signal write_addr                : std_logic_vector(TRB_ADDR_BITS - 1 downto 0);
   signal we                        : std_logic;
@@ -47,11 +47,12 @@ architecture TB of TB_FPGATRACEBUFFER is
 begin
 
   config_slv <= config_to_slv(config);
+  status <= slv_to_status(status_slv);
 
   FPGA_TRACE_BUFFER_1 : entity work.fpga_trace_buffer
     port map (
       CONFIG_I     => config_slv,
-      STATUS_O     => status,
+      STATUS_O     => status_slv,
       READ_ADDR_O  => read_addr,
       WRITE_ADDR_O => write_addr,
       WE_O         => we,
@@ -117,6 +118,19 @@ begin
     config.enable <= "1";
     wait for 20 * CLK_PERIOD;
     te            <= '1';
+    wait for CLK_PERIOD;
+    te            <= '0';
+    while status.tr_hit = "0" loop
+      wait for CLK_PERIOD;
+    end loop;
+    config.reset  <= "1";
+    config.timer_stop <= "011";
+    wait for CLK_PERIOD;
+    config.reset  <= "0";
+    wait for CLK_PERIOD;
+    te <= '1';
+    wait for CLK_PERIOD;
+    te <= '0';
 
     wait;
 
