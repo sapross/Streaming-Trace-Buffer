@@ -13,15 +13,15 @@
 -- Dependencies:
 --
 -- Revision:
--- Revision 0.01 - File Created
+-- R2022-11-1401 - File Created
 -- Additional Comments:
 --
 ----------------------------------------------------------------------------------
 
 library IEEE;
-  use IEEE.STD_LOGIC_1164.ALL;
-  use IEEE.NUMERIC_STD.ALL;
-  use WORK.DTB_PKG.ALL;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+  use work.dtb_pkg.all;
 
 entity FPGA_TRACE_BUFFER is
   port (
@@ -53,20 +53,20 @@ architecture BEHAVIORAL of FPGA_TRACE_BUFFER is
 
   type state_t is (st_idle, st_wait_for_trigger, st_capture_trace, st_rwmode, st_done);
 
-  signal state,     state_next                       : state_t;
+  signal state,     state_next                           : state_t;
 
-  signal addr_low,  addr_low_next                    : integer range 0 to TRB_WIDTH - 1;
-  signal addr_high                                   : integer range 0 to TRB_DEPTH - 1;
-  signal addr_high_next                              : integer range 0 to TRB_DEPTH - 1;
-  signal addr_high_prev                              : integer range 0 to TRB_DEPTH - 1;
+  signal addr_low,  addr_low_next                        : integer range 0 to TRB_WIDTH - 1;
+  signal addr_high                                       : integer range 0 to TRB_DEPTH - 1;
+  signal addr_high_next                                  : integer range 0 to TRB_DEPTH - 1;
+  signal addr_high_prev                                  : integer range 0 to TRB_DEPTH - 1;
 
-  signal timer,     timer_next                       : integer range 0 to TRB_BITS - 1;
+  signal timer,     timer_next                           : integer range 0 to TRB_BITS - 1;
 
-  signal status,    status_next                      : status_t;
-  signal config                                      : config_t;
+  signal status,    status_next                          : status_t;
+  signal config                                          : config_t;
 
-  signal trace_reg, trace_reg_next                   : std_logic_vector(TRB_WIDTH - 1 downto 0);
-  signal fpga_serial_valid                           : std_logic;
+  signal trace_reg, trace_reg_next                       : std_logic_vector(TRB_WIDTH - 1 downto 0);
+  signal fpga_serial_valid                               : std_logic;
 
   function get_limit (
     constant config_i : config_t
@@ -76,11 +76,11 @@ architecture BEHAVIORAL of FPGA_TRACE_BUFFER is
     -- Formular for the limit L:
     -- Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
     -- L = (n+1)/N * P - 1
-    -- Example: Trace Buffer can hold 64 bits (P = 64), timer_stop is 3
+    -- Example: Trace Buffer can hold 64 bits (P = 64), trg_delay is 3
     -- bits (N = 8 => 0<n<8) and timer_stop is set to "011" (n=3):
     -- L = (3 + 1)/ 8 * 64 - 1 = 31
-    return ((to_integer(unsigned(config.timer_stop)) + 1) * TRB_BITS) /
-      (2 ** config.timer_stop'length) - 1;
+    return ((to_integer(unsigned(config_i.trg_delay)) + 1) * TRB_BITS) /
+      (2 ** config_i.trg_delay'length) - 1;
 
   end function;
 
@@ -90,11 +90,14 @@ begin
   WRITE_ADDR_O <= std_logic_vector(to_unsigned(addr_high_prev, TRB_ADDR_BITS));
   FPGA_DOUT_O  <= trace_reg(addr_low);
 
+  STATUS_O <= status_to_slv(status);
+
+
   -- Change function of FPGA_TRIG_O based on config.
   FPGA_TRIGGER_OUTPUT : process (status, config, fpga_serial_valid) is
   begin
 
-    if (config.TE_mode = "0") then
+    if (config.trg_mode = "0") then
       FPGA_TRIG_O <= status.tr_hit(0);
     else
       FPGA_TRIG_O <= not status.tr_hit(0) and fpga_serial_valid;
@@ -103,22 +106,20 @@ begin
   end process FPGA_TRIGGER_OUTPUT;
 
   -- Synchronous update of mode signal and status output.
-  CONFIG_STATUS_UPDATE : process (FPGA_CLK_I) is
+  CONFIG_UPDATE : process (FPGA_CLK_I) is
   begin
 
     if rising_edge(FPGA_CLK_I) then
       config <= slv_to_config(CONFIG_I);
-      -- Reset is held for exactly one cycle.
-      STATUS_O <= status_to_slv(status);
     end if;
 
-  end process CONFIG_STATUS_UPDATE;
+  end process CONFIG_UPDATE;
 
   FSM_CORE : process (FPGA_CLK_I) is
   begin
 
     if rising_edge(FPGA_CLK_I) then
-      if (config.reset = "1") then
+      if (config.trg_reset = "1") then
         state          <= st_idle;
         status         <= STATUS_DEFAULT;
         addr_low       <= 0;
@@ -130,7 +131,7 @@ begin
         WE_O   <= '0';
         DATA_O <= (others => '0');
       else
-        if (config.enable = "1") then
+        if (config.trg_enable = "1") then
           state          <= state_next;
           status         <= status_next;
           addr_low       <= addr_low_next;
@@ -174,7 +175,7 @@ begin
   FSM : process (state, addr_low, addr_high, timer, trace_reg, config, FPGA_TRACE_I, FPGA_TRIG_I) is
   begin
 
-    if (config.reset = "1") then
+    if (config.trg_reset = "1") then
       state_next <= st_idle;
     else
       state_next     <= state;
@@ -187,11 +188,11 @@ begin
       case state is
 
         when st_idle =>
-          -- Reset address high and low;
+          -- trg_Reset address high and low;
           addr_low_next  <= 0;
           addr_high_next <= 0;
-          -- TE_mode switches between TraceBuffer- and RWBuffer-mode.
-          if (config.te_mode = "0") then
+          -- trg_mode switches between TraceBuffer- and RWBuffer-mode.
+          if (config.trg_mode = "0") then
             state_next <= st_wait_for_trigger;
           else
             state_next <= st_rwmode;

@@ -117,12 +117,12 @@ begin
 
     wait for 1 ps;
     config        <= CONFIG_DEFAULT;
-    config.reset  <= "1";
+    config.trg_reset  <= "1";
     trig_i        <= '0';
     wait for CLK_PERIOD;
-    config.reset  <= "0";
+    config.trg_reset  <= "0";
     wait for CLK_PERIOD;
-    config.enable <= "1";
+    config.trg_enable <= "1";
 
     wait for 20 * CLK_PERIOD;
     report "Testing Trigger functionality with default timer stop (full future)";
@@ -137,34 +137,34 @@ begin
     end loop;
 
     report "Testing Trigger functionality with centered timer stop (centered event)";
-    config.reset      <= "1";
-    config.timer_stop <= "011";
+    config.trg_reset      <= "1";
+    config.trg_delay <= "011";
     wait for CLK_PERIOD;
-    config.reset      <= "0";
+    config.trg_reset      <= "0";
     wait for 2 * CLK_PERIOD;
     trig_i            <= '1';
     wait for CLK_PERIOD;
     trig_i            <= '0';
 
     report "Testing Trigger functionality with immediate timer stop (full history)";
-    config.reset      <= "1";
-    config.timer_stop <= "000";
+    config.trg_reset      <= "1";
+    config.trg_delay <= "000";
     wait for CLK_PERIOD;
-    config.reset      <= "0";
+    config.trg_reset      <= "0";
     wait for 2 * CLK_PERIOD;
     trig_i            <= '1';
     wait for CLK_PERIOD;
     trig_i            <= '0';
 
     report "Testing Data Transfer functionality";
-    config.reset      <= "1";
-    config.te_mode    <= "1";
-    config.timer_stop <= "111";
-    config.enable     <= "0";
+    config.trg_reset      <= "1";
+    config.trg_mode    <= "1";
+    config.trg_delay <= "111";
+    config.trg_enable     <= "0";
     wait for CLK_PERIOD;
-    config.reset      <= "0";
+    config.trg_reset      <= "0";
     wait for CLK_PERIOD;
-    config.enable     <= "1";
+    config.trg_enable     <= "1";
 
     while (trig_o = '0') loop
 
