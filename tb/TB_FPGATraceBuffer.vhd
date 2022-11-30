@@ -50,7 +50,7 @@ begin
   config_slv <= config_to_slv(config);
   status     <= slv_to_status(status_slv);
 
-  FPGA_TRACE_BUFFER_1 : entity work.fpga_trace_buffer
+  FPGA_STB_1 : entity work.fpga_stb
     port map (
       CONFIG_I     => config_slv,
       STATUS_O     => status_slv,
@@ -62,7 +62,7 @@ begin
       FPGA_CLK_I   => clk,
       FPGA_TRIG_I    => trig_i,
       FPGA_TRACE_I => trace,
-      FPGA_DOUT_O  => dout,
+      FPGA_TRACE_O  => dout,
       FPGA_TRIG_O  => trig_o
     );
 
@@ -130,7 +130,7 @@ begin
     wait for CLK_PERIOD;
     trig_i <= '0';
 
-    while status.tr_hit = "0" loop
+    while status.trg_event = "0" loop
 
       wait for CLK_PERIOD;
 

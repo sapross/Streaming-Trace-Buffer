@@ -67,7 +67,7 @@ package dtb_pkg is
 
   type status_t is record
     -- Has the trigger been hit?
-    tr_hit : std_logic_vector(0 downto 0);
+    trg_event : std_logic_vector(0 downto 0);
     -- Bit corresponding to the trigger event.
     event_pos : std_logic_vector(trb_width_bits - 1 downto 0);
     -- Byte address containing the event.
@@ -78,7 +78,7 @@ package dtb_pkg is
   constant status_default : status_t
  :=
  (
-   tr_hit => "0",
+   trg_event => "0",
    event_pos => (others => '0'),
    event_addr => (others => '0')
  );
@@ -88,10 +88,12 @@ package dtb_pkg is
   function slv_to_status (value : std_logic_vector(status_bits - 1 downto 0)) return status_t;
 
   type sysint_config_t is record
-    op   :   std_logic;
-    dma  :  std_logic;
-    addr : std_logic_vector(trb_addr_bits - 1 downto 0);
+    op       :   std_logic;
+    auto_inc :  std_logic;
+    addr     : std_logic_vector(trb_addr_bits - 1 downto 0);
   end record sysint_config_t;
+
+  constant sysconfig_bits : natural := 2 + trb_addr_bits;
 
   constant sysconf_default : sysint_config_t :=
   (
@@ -129,7 +131,7 @@ package body dtb_pkg is
   function status_to_slv (status : status_t) return std_logic_vector is
   begin
 
-    return status.tr_hit & status.event_pos & status.event_addr;
+    return status.trg_event & status.event_pos & status.event_addr;
 
   end function status_to_slv;
 
@@ -139,7 +141,7 @@ package body dtb_pkg is
     return (
       event_addr => value(trb_addr_bits - 1 downto 0),
       event_pos => value(trb_width_bits + trb_width_bits - 1 downto trb_addr_bits),
-      tr_hit => value(trb_width_bits + trb_width_bits downto trb_width_bits + trb_width_bits)
+      trg_event => value(trb_width_bits + trb_width_bits downto trb_width_bits + trb_width_bits)
       );
 
   end function;
