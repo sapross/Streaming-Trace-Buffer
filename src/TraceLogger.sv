@@ -39,6 +39,7 @@ module TraceLogger (
                   // Number of traces captured in parallel.
                   output bit [$clog2(TRB_MAX_TRACES)-1:0] NTRACE_O,
 
+
                   // Outgoing signals to the system interface.
                   // Position of the event in the word width of the memory.
                   input logic [TRB_WIDTH-1:0]             EVENT_POS_I,
@@ -74,26 +75,32 @@ module TraceLogger (
    bit [$clog2(TRB_DEPTH)-1:0] ptr, ptr_next;
    assign RW_PTR_O = ptr;
 
+   // --- (Pre-)Trigger Event Handling ---
+
    // Address on which TRG_EVENT_I flipped from 0 to 1.
    bit [$clog2(TRB_DEPTH)-1:0]                            event_address;
    // Register required to determine TRG_EVENT_I posedge.
-   logic                                                  reg_event;
+   logic                                                  sticky_event;
    assign stat.evend_addr = event_address;
+
 
    always_ff @(posedge CLK_I) begin : SAVE_EVENT_ADDRESS
       if (!RST_NI) begin
-         reg_event = 0;
+         sticky_event = 0;
          event_address = '0;
-         end
-      else if (TRG_EVENT_I == 1 && reg_event == 0) begin
+      end
+      else if (TRG_EVENT_I == 1 && sticky_event == 0) begin
+         // Save on which address the trigger has been registered.
          event_address = ptr;
-         reg_event = 1;
+         sticky_event = 1;
       end
    end
 
    bit [$clog2(TRB_DEPTH)-1:0] word_counter, word_counter_next;
+
    always_ff @(posedge CLK_I) begin
-      if(!RST_NI || CONF_UPDATE_I) begin
+      // Only start counting down the moment a trigger event has been registered.
+      if(!RST_NI || !sticky_event) begin
          // The config trg_delay controls the ratio values before and after the
          // trigger event i.e.:
          // trg_delay = 111 : (Almost) all trace data is from directly after the trigger event.
@@ -103,18 +110,21 @@ module TraceLogger (
          // Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
          // L = n/N * P - 1
          word_counter = (conf.trg_delay * TRB_DEPTH) / 2**(TRB_DELAY_BITS-1) -1;
+         stat.trg_event = 0;
       end
       else begin
          if (word_counter != 0) begin
             word_counter = word_counter - 1;
+            stat.trg_event = 0;
          end
+         else begin
+            stat.trg_event = 1;
+         end
+      end // else: !if(!RST_NI || !TRB_EVENT_I)
+   end // always_ff @ (posedge CLK_I)
 
 
-
-   end
-
-
-
+   // --- Read/Write to/from memory ---
    typedef enum {
                  st_idle,
                  st_rw_memory,
@@ -127,7 +137,10 @@ module TraceLogger (
    assign DMEM_O = word;
 
    logic                 store, store_next;
-   assign STORE_O = store;
+
+   // Store signal is gated by trigger event. The moment word_counter has run out
+   // subsequent writes to memory are supressed.
+   assign STORE_O = store & ~stat.trg_event;
 
    always_ff (@posedge CLK_I)  begin : FSM_CORE
       if (!RST_NI) begin
@@ -141,14 +154,12 @@ module TraceLogger (
          word <= word_next;
          ptr <= ptr_next;
          store <= store_next;
-      end
-   end
+      end // else: !if(!RST_NI)
+   end // block: FSM_CORE
 
+   // State Machine controlling read&write to memory.
    always_comb begin : FSM
-
       RW_O = 0;
-      STORE_O = 0;
-
       if (!RST_NI) begin
          state_next = st_idle;
          word_next = '0;
@@ -162,28 +173,30 @@ module TraceLogger (
          case (state)
            // Waiting for load from tracer.
            st_idle: begin
+              //  For every store (load signal here) issued by the Tracer,
+              //  the write pointer is incremented and data from
+              //  the Tracer registerd.
               if (LOAD_I) begin
                  word_next = DATA_I;
                  state_next = st_rw_memory;
-                 ptr_next = (ptr_next +1 ) % TRB_DEPTH;
+                 ptr_next = (ptr_next + 1 ) % TRB_DEPTH;
               end
            end
            // Exchange trace with word from memory.
            st_rw_memory: begin
+              // Signal intent to exchange one word with memory.
               RW_O = 1;
+              // Continue if memory signals that it's the TraceLoggers turn to
+              // RW.
               if (RW_TURN_I = 1) begin
                  state_next = st_idle;
+                 // Store word from memory in register.
                  word_next = DMEM_I;
-                 // Write mem word back to tracer.
+                 // Write registered word back to tracer.
                  store_next = 1;
               end
          endcase // case (state)
       end // else: !if(!RST_NI)
    end // block: FSM
-
-
-
-
-
 
 endmodule // TraceLogger
