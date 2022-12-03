@@ -7,7 +7,7 @@
 -- Author     : Stephan Proß <s.pross@stud.uni-heidelberg.de>
 -- Company    :
 -- Created    : 2022-09-13
--- Last update: 2022-11-14
+-- Last update: 2022-12-03
 -- Platform   :
 -- Standard   : VHDL'08
 -------------------------------------------------------------------------------
@@ -30,15 +30,17 @@ package dtb_pkg is
 
   -- Ideally keep all values as a power of two.
   -- Write/Read width of the trace buffer.
-  constant trb_width : natural := 8;
+  constant trb_width : natural := 32;
   -- Number of bits required to iterate over TRB_WIDTH
   constant trb_width_bits : natural := natural(ceil(log2(real(trb_width))));
   -- Number of words buffer can contain.
-  constant trb_depth : natural := 8;
+  constant trb_depth : natural := 32;
   -- Number of bits required to address all words.
   constant trb_addr_bits : natural := natural(ceil(log2(real(trb_depth))));
   -- Total number of bits stored in buffer.
   constant trb_bits : natural := trb_width * trb_depth;
+  constant trb_max_traces : natural := 8;
+  constant trb_max_traces_bits : natural := natural(ceil(log2(real(trb_max_traces))));
 
   type config_t is record
     -- Reset trigger logic.

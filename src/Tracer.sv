@@ -10,40 +10,44 @@
 import DTB_PKG::*;
 
 module Tracer (
-                 // Signals & config from the system interface.
-                 input logic                      RST_,
-                 input logic                      EN_I,
-                 // Mode bit switches from trace-buffer to data-streaming mode.
-                 input logic                      MODE_I,
-                 // Number of traces captured in parallel.
-                 input bit [$clog2(TRB_MAX_TRACES)-1:0]        NTRACE_I,
-                 // Data from memory.
-                 input logic [TRB_WIDTH-1:0]      DATA_I,
-                 // Load signal triggering capture of input data.
-                 input logic                      LOAD_I,
+               // Signals & config from the system interface.
+               input logic                            RST_I,
+               input logic                            EN_I,
+               // Mode bit switches from trace-buffer to data-streaming mode.
+               input logic                            MODE_I,
+               // Number of traces captured in parallel.
+               input bit [$clog2(TRB_MAX_TRACES)-1:0] NTRACE_I,
+               // Trigger Event after delay.
+               input logic                            TRG_EVENT_I,
+               // Data from memory.
+               input logic [TRB_WIDTH-1:0]            DATA_I,
+               // Load signal triggering capture of input data.
+               input logic                            LOAD_I,
 
-                 // Outgoing signals to the system interface.
-                 // Position of the event in the word width of the memory.
-                 output logic [TRB_WIDTH-1:0]     EVENT_POS_O,
-                 // Signal denoting, whether event has occured and delay timer has run out.
-                 output logic                     TRG_EVENT_O,
-                 // Trace register to be stored in memory.
-                 output logic [TRB_WIDTH-1:0]     DATA_O,
-                 // Trigger storing of data and status.
-                 output logic                     STORE_O,
+               // Outgoing signals to the system interface.
+               // Position of the event in the word width of the memory.
+               output logic [TRB_WIDTH-1:0]           EVENT_POS_O,
+               // Signal denoting, whether event has occured and delay timer has run out.
+               output logic                           TRG_EVENT_O,
+               // Trace register to be stored in memory.
+               output logic [TRB_WIDTH-1:0]           DATA_O,
+               // Trigger storing of data and status.
+               output logic                           STORE_O,
+               // Signal for loading data from memory.
+               output logic                            LOAD_O,
 
-                 // Signals of the FPGA facing side.
-                 input logic                      FPGA_CLK_I,
-                 // Trigger signal.
-                 input logic                      FPGA_TRIG_I,
-                 // Trace input and output. Allows for daisy-chaining STBs and serial
-                 // data streaming from system interface
-                 input logic                      FPGA_TRACE_I,
-                 output logic                     FPGA_TRACE_O,
-                 // Set to high after trigger event with delay. Usable for daisy-chaining.
-                 // Indicates whether data is valid in streaming mode.
-                 output logic                     FPGA_TRIG_O
-                 );
+               // Signals of the FPGA facing side.
+               input logic                            FPGA_CLK_I,
+               // Trigger signal.
+               input logic                            FPGA_TRIG_I,
+               // Trace input and output. Allows for daisy-chaining STBs and serial
+               // data streaming from system interface
+               input logic                            FPGA_TRACE_I,
+               output logic                           FPGA_TRACE_O,
+               // Set to high after trigger event with delay. Usable for daisy-chaining.
+               // Indicates whether data is valid in streaming mode.
+               output logic                           FPGA_TRIG_O
+               );
 
    typedef enum                                       {
                                                        st_idle,
@@ -54,257 +58,157 @@ module Tracer (
                                                        } state_t;
    state_t state, state_next;
 
-
-   localparam integer unsigned                        low_bits = $clog2(TRB_WIDTH);
-   localparam integer unsigned                        high_bits = $clog2(TRB_DEPTH);
-
-   // Low address i.e. bit position of trigger.
-   bit [low_bits-1: 0]                                laddr, laddr_next;
-
-   // High address i.e. address of the word containing the trigger.
-   bit [high_bits-1:0]                                haddr, haddr_next;
-   bit [high_bits-1:0]                                haddr_prev;
-
-   assign READ_ADDR_O = haddr;
-   assign WRITE_ADDR_O = haddr_prev;
-
-   logic                                              rw, rw_next;
-   assign RW_O = rw;
-
-   logic [TRB_WIDTH-1:0]                              dword, dword_next;
-   assign DATA_O = dword;
-
-
-   // Counter for the number of bits processed after the trigger event.
-   bit [$clog2(TRB_BITS)-1:0]                         bit_counter, bit_counter_next;
-
-   // Status register containing information regarding trigger.
-   status_t stat, stat_next;
-   assign STATUS_O = stat;
-
-   // Config register
-   config_t conf;
-   always_ff @(posedge FPGA_CLK_I) begin : CONF_UPDATE
-      conf <= CONFIG_I;
-   end
+   // Bit position of trigger.
+   bit [$clog2(TRB_WIDTH)-1: 0]                       trace_pos;
+   bit [$clog2(TRB_WIDTH)-1: 0]                       stream_pos;
 
    // Trace Register storing intermediate trace until a full data word for the
    // memory interface is collected.
-   logic [TRB_WIDTH-1:0] trace, trace_next;
-   assign FPGA_TRACE_O = trace[laddr];
+   logic [TRB_WIDTH-1:0] trace,stream;
+   assign DATA_O = trace;
+   // Serial output data validity.
+   logic                                              data_valid;
 
+   // Sticky Trigger.
+   logic                                              sticky_trigger;
+   logic                                              trigger;
 
-   // Internal signal denoting, whether data streamed out of the TRACE_O line
-   // is valid.
-   logic                 ser_valid, ser_valid_next;
-
-   // Controls value of TRIG_O line dependent on trg_mode.
-   // In Trace-Buffer-Mode, TRIG_O is set high if both the trigger event has
-   // been met and the bit_counter has run out.
-   // In Streaming-Mode, TRIG_O indicates, whether TRACE_O line holds valid data.
-   always_comb begin : FPGA_TRIGGER_OUTPUT
-      if (conf.trg_mode) begin
-         // With trg_mode = 1 TRIG_O becomes a valid signal.
-         // Output of TRACE_O is safe to read so long as rw haven't read all
-         // the data (~trg_event) and serial_data is valid.
-         FPGA_TRIG_O = ~stat.trg_event & ser_valid;
+   // Make sticky trigger sticky depending on mode.
+   always_ff @(posedge FPGA_CLK_I) begin
+      if (RST_I) begin
+         sticky_trigger <= 0;
+         EVENT_POS_O <= 0;
       end
       else begin
-         // With trg_mode = 0 TRIG_O is simply the whether or not the trigger
-         // condition has been met and the timer has run out.
-         FPGA_TRIG_O = stat.trg_event;
+         sticky_trigger <= sticky_trigger | FPGA_TRIG_I;
+         if (!MODE_I) begin
+            if (FPGA_TRIG_I && !sticky_trigger) begin
+               EVENT_POS_O <= trace_pos;
+            end
+         end
+         else begin
+            EVENT_POS_O <= 0;
+         end
+      end
+   end
+   assign trigger = FPGA_TRIG_I | sticky_trigger;
+   assign TRG_EVENT_O = FPGA_TRIG_I | sticky_trigger;
+
+
+   // Switch meaning/content of FPGA_TRACE and TRIG output.
+   assign FPGA_TRACE_O = stream[trace_pos];
+   always_comb begin : SWITCH_OUTPUT
+      if (!MODE_I) begin
+         // FPGA_TRIG_O indicates trigger event after delay.
+         FPGA_TRIG_O = TRG_EVENT_I;
+      end
+      else begin
+         // FPGA_TRIG_O indicates whether the stream_data is valid.
+         FPGA_TRIG_O = data_valid;
       end
    end
 
-   // Function for calculating the maximum bit_counter value.
-   // The config trg_delay controls the ratio values before and after the
-   // trigger event i.e.:
-   // trg_delay = 111 : (Almost) all trace data is from directly after the trigger event.
-   // trg_delay = 100 : Half the trace data if before and after the event (centered).
-   // trg_delay = 000 : Entire trace contains data leading up to trace event.
-   function automatic integer unsigned get_limit(config_t conf_i);
-      // Formular for the limit L:
-      // Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
-      // L = n/N * P - 1
-      // Example: Trace Buffer can hold 64 bits (P = 64), trg_delay is 3
-      // bits (N = 8 => 0<n<8) and timer_stop is set to "011" (n=3):
-      // L = 3/8 * 64 - 1 = 23
-      return (conf_i.trg_delay + 1) * TRB_BITS / (2**$size(conf_i.trg_delay) - 1);
-   endfunction // get_limit
-
-
-
-   always_ff @(posedge FPGA_CLK_I) begin : FSM_CORE
-      if (conf.trg_reset) begin
-         state <= st_idle;
-         stat <= STATUS_DEFAULT;
-         laddr <= 0;
-         haddr <= 0;
-         haddr_prev <= TRB_DEPTH-1;
-
-         bit_counter <= 0;
+   // Trace registering and storing in memory.
+   always_ff @(posedge FPGA_CLK_I) begin : TRACE_PROCESS
+      if (RST_I) begin
          trace <= '0;
-
-         rw <= 0;
-         ser_valid <= 0;
-         dword <= '0;
-
+         STORE_O <= 0;
+         trace_pos <= 0;
       end
-      else begin
-         if (conf.trg_enable) begin
-            state <= state_next;
-            stat <= stat_next;
-            laddr <= laddr_next;
-            haddr_prev <= haddr;
-            haddr <= haddr_next;
-
-            bit_counter <= bit_counter_next;
-            trace <= trace_next;
-
-            rw <= rw_next;
-            ser_valid <= ser_valid_next;
-            dword <= dword_next;
+      else if (EN_I) begin
+         STORE_O <= 0;
+         trace[trace_pos] <= FPGA_TRACE_I;
+         trace_pos <= (trace_pos + 1) % TRB_WIDTH;
+         if (trace_pos == TRB_WIDTH - 1) begin
+            STORE_O <= 1;
          end
-      end // else: !if(conf.trg_reset)
-   end // block: FSM_CORE
-
-   always_comb begin : FSM
-      if (conf.trg_reset) begin
-         state_next = st_idle;
-         stat_next = STATUS_DEFAULT;
-      end
-      else begin
-         ser_valid_next = 0;
-         state_next = state;
-         stat_next = stat;
-
-         case (state)
-
-           st_idle: begin
-              // Decide which mode to enter.
-              if (conf.trg_mode == 0) begin
-                 state_next = st_wait_for_trigger;
-              end
-              else begin
-                 state_next = st_rwmode;
-              end
-           end // case: st_idle
-
-           st_wait_for_trigger: begin
-              // Has the trigger event occured?
-              if (FPGA_TRIG_I == 1) begin
-                 // Transition into caputure state.
-                 state_next = st_capture_trace;
-                 // Initialize bit_counter
-                 bit_counter_next = get_limit(conf);
-                 // Save next laddr and current haddr in status for host to evaluate.
-                 stat_next.event_pos = laddr_next;
-                 stat_next.event_addr = haddr;
-              end
-           end // case: st_wait_for_trigger
-
-           st_capture_trace: begin
-              if (0 < bit_counter) begin
-                 bit_counter_next <= bit_counter - 1;
-              end
-              else begin
-                 state_next = st_done;
-                 stat_next.trg_event = 1;
-              end
-           end // case: st_capture_trace
-
-           st_rwmode: begin
-              // TODO Read-Write mode for full streaming.
-              ser_valid_next = 1;
-              stat_next.event_pos = 0;
-              stat_next.event_addr = haddr;
-
-           end
-           st_done: begin
-              state_next <= st_done;
-           end
-         endcase // case (state)
-      end // else: !if(conf.trg_reset)
-   end // block: FSM
-
-
-   always_comb begin : TRACE_PROCESS
-
-      if (conf.trg_reset) begin
-         trace_next = '0;
-         laddr_next = 0;
-         haddr_next = 0;
-         dword_next = '0;
-
-      end
-      else if (conf.trg_enable) begin
-         trace_next = trace;
-         laddr_next = laddr;
-         haddr_next = haddr;
-         dword_next = dword;
-
-         if (state == st_idle) begin
-            // Reset addresses
-            trace_next = '0;
-            laddr_next = 0;
-            haddr_next = 0;
-            dword_next = '0;
-         end
-         else if (state != st_done) begin
-            // laddr overflow on next posedge?
-            if (laddr < TRB_WIDTH - 1) begin
-               laddr_next <= (laddr + 1) % TRB_WIDTH;
-            end
-            else begin
-               // Increment haddr.
-               haddr_next = (haddr + 1) % TRB_DEPTH;
-               // Trace register exchanges data with memory.
-               dword_next <= {FPGA_TRACE_I, trace[TRB_WIDTH-2:0]};
-               trace_next = DATA_I;
-            end
-            // "Shift" new values into trace register.
-            trace_next[laddr] = FPGA_TRACE_I;
-         end // if (state != st_done)
-      end // if (conf.trg_enable)
+      end // else: !if(RST_I)
    end // block: TRACE_PROCESS
 
-
-   logic data_valid;
-   logic [high_bits-1:0] read_addr;
-   logic [high_bits-1:0] write_addr;
-
-
-   always_ff @(posedge FPGA_CLK_I) begin : MEMORY_HANDLER
-      if (conf.trg_reset) begin
-         rw <= 0;
-         data_valid <=0;
+   // Stream register loading from memory.
+   // Load pulse generation.
+   logic       ld;
+   logic [1:0] ld_reg;
+   always_ff @(posedge FPGA_CLK_I) begin : LOAD_PULSE
+      ld_reg = {ld_reg[0], ld};
+   end
+   always_comb begin
+      if (!MODE_I) begin
+         LOAD_O = STORE_O;
       end
       else begin
-         if (state != st_done && conf.trg_enable == 1) begin
-            // If laddr is about to overflow, data exchange with memory has to happen.
-            if(laddr == TRB_WIDTH -1) begin
-               if (data_valid == 0) begin
-                  // New data did not arrive before required. Error.
-                  $error("New data did not arrive before required by Tracer!");
-                  // TODO Add status bit to indicate when that happens.
-               end
-               // Current data is invalid until exchange occured.
-               data_valid <= 0;
-               // Request read/write from memory.
-               rw <= 1;
-            end
-
-            if(data_valid == 0 and ACK_I == 1) begin
-               rw <= 0;
-               data_valid <= 1;
-            end
-
-         end
+         // Only set LOAD_O to high on a positive edge in ld_reg.
+         LOAD_O  = ~ld_reg[1] & ld_reg[0];
       end
-
    end
 
 
+   logic new_data;
 
+   always_ff @(posedge FPGA_CLK_I) begin : STREAM_PROCESS
+      if (RST_I) begin
+         stream <= '0;
+         stream_pos <= 0;
+
+         new_data <= 0;
+         data_valid <= 0;
+         ld <= 0;
+
+      end
+      else begin
+         ld <= 0;
+         // Set data_valid as soon as LOAD_I from TraceLogger is set to high.
+         if (LOAD_I) begin
+            new_data <= 1;
+         end
+         if (!MODE_I) begin
+            // Tracer mode.
+            // Start requesting new data at trace position zero.
+            if (EN_I == 1) begin
+               if (trace_pos == 0) begin
+                  ld <= 1;
+               end
+
+               // Load DATA_I into stream register in position overflow.
+               // Validity of data is assumed at this point.
+               if (trace_pos == TRB_WIDTH - 1) begin
+                  stream <= DATA_I;
+               end
+            end
+         end
+         else begin
+
+            data_valid <= 1;
+            // Request data from on stream position overflow.
+            if (stream_pos == 0 && EN_I == 1) begin
+               ld <= 1;
+            end
+
+            if (FPGA_TRIG_I) begin
+               // Increment enable stream_pos counter only if TRIG_I signial is set.
+               // TRIG_I acts essentially as load signal for the streaming logic.
+               if (stream_pos < TRB_WIDTH - 1) begin
+                  stream_pos <= stream_pos + 1;
+               end
+               else begin
+                  // stream_pos will overflow on next cycle with set TRIG_I.
+                  // Do we have new data at DATA_I input?
+                  if (new_data) begin
+                     if (FPGA_TRIG_I) begin
+                        stream_pos <= 0;
+                        stream <= DATA_I;
+                     end
+                  end
+                  else begin
+                     // Without new data, signal to FPGA serial data on FPGA_TRACE_O is
+                     // invalid.
+                     data_valid <= 0;
+                  end // else: !if(new_data)
+               end // else: !if(stream_pos < TRB_WIDTH - 1)
+
+            end // if (stream_pos == TRB_WIDTH - 1)
+         end // else: !if(!MODE_I)
+      end // else: !if(RST_I)
+   end // block: STREAM_PROCESS
 
 endmodule // Tracer
