@@ -71,7 +71,6 @@ module Tracer (
 
    // Sticky Trigger.
    logic                                              sticky_trigger;
-   logic                                              trigger;
 
    // Make sticky trigger sticky depending on mode.
    always_ff @(posedge FPGA_CLK_I) begin
@@ -91,8 +90,7 @@ module Tracer (
          end
       end
    end
-   assign trigger = FPGA_TRIG_I | sticky_trigger;
-   assign TRG_EVENT_O = FPGA_TRIG_I | sticky_trigger;
+   assign TRG_EVENT_O = sticky_trigger;
 
 
    // Switch meaning/content of FPGA_TRACE and TRIG output.
