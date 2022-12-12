@@ -7,7 +7,7 @@
 -- Author     : Stephan Proß <s.pross@stud.uni-heidelberg.de>
 -- Company    :
 -- Created    : 2022-09-13
--- Last update: 2022-12-03
+-- Last update: 2022-12-12
 -- Platform   :
 -- Standard   : VHDL'08
 -------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ package dtb_pkg is
   -- Total number of bits stored in buffer.
   constant trb_bits : natural := trb_width * trb_depth;
   constant trb_max_traces : natural := 8;
-  constant trb_max_traces_bits : natural := natural(ceil(log2(real(trb_max_traces))));
+  constant trb_max_traces_bits : natural := natural(ceil(log2(ceil(log2(real(trb_max_traces))))));
 
   type config_t is record
     -- Reset trigger logic.

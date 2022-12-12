@@ -11,61 +11,67 @@ import DTB_PKG::*;
 
 module Tracer (
                // Signals & config from the system interface.
-               input logic                            RST_I,
-               input logic                            EN_I,
+               input logic                       RST_I,
+               input logic                       EN_I,
                // Mode bit switches from trace-buffer to data-streaming mode.
-               input logic                            MODE_I,
+               input logic                       MODE_I,
                // Number of traces captured in parallel.
-               input bit [$clog2(TRB_MAX_TRACES)-1:0] NTRACE_I,
+               input bit [TRB_NTRACE_BITS-1:0]   NTRACE_I,
                // Trigger Event after delay.
-               input logic                            TRG_EVENT_I,
+               input logic                       TRG_EVENT_I,
                // Data from memory.
-               input logic [TRB_WIDTH-1:0]            DATA_I,
+               input logic [TRB_WIDTH-1:0]       DATA_I,
                // Load signal triggering capture of input data.
-               input logic                            LOAD_I,
+               input logic                       LOAD_I,
 
                // Outgoing signals to the system interface.
                // Position of the event in the word width of the memory.
-               output logic [TRB_WIDTH-1:0]           EVENT_POS_O,
+               output logic [TRB_WIDTH-1:0]      EVENT_POS_O,
                // Signal denoting, whether event has occured and delay timer has run out.
-               output logic                           TRG_EVENT_O,
+               output logic                      TRG_EVENT_O,
                // Trace register to be stored in memory.
-               output logic [TRB_WIDTH-1:0]           DATA_O,
+               output logic [TRB_WIDTH-1:0]      DATA_O,
                // Trigger storing of data and status.
-               output logic                           STORE_O,
+               output logic                      STORE_O,
                // Signal for loading data from memory.
-               output logic                            LOAD_O,
+               output logic                      LOAD_O,
 
                // Signals of the FPGA facing side.
-               input logic                            FPGA_CLK_I,
+               input logic                       FPGA_CLK_I,
                // Trigger signal.
-               input logic                            FPGA_TRIG_I,
+               input logic                       FPGA_TRIG_I,
                // Trace input and output. Allows for daisy-chaining STBs and serial
                // data streaming from system interface
-               input logic                            FPGA_TRACE_I,
-               output logic                           FPGA_TRACE_O,
+               input logic [TRB_MAX_TRACES-1:0]  FPGA_TRACE_I,
+               output logic [TRB_MAX_TRACES-1:0] FPGA_TRACE_O,
                // Set to high after trigger event with delay. Usable for daisy-chaining.
                // Indicates whether data is valid in streaming mode.
-               output logic                           FPGA_TRIG_O
+               output logic                      FPGA_TRIG_O
                );
 
-   typedef enum                                       {
-                                                       st_idle,
-                                                       st_wait_for_trigger,
-                                                       st_capture_trace,
-                                                       st_rwmode,
-                                                       st_done
-                                                       } state_t;
+   typedef enum                                {
+                                                st_idle,
+                                                st_wait_for_trigger,
+                                                st_capture_trace,
+                                                st_rwmode,
+                                                st_done
+                                                } state_t;
    state_t state, state_next;
 
    // Bit position of trigger.
-   bit [$clog2(TRB_WIDTH)-1: 0]                       trace_pos;
-   bit [$clog2(TRB_WIDTH)-1: 0]                       stream_pos;
+   bit [$clog2(TRB_WIDTH)-1: 0]                trace_pos;
+   bit [$clog2(TRB_WIDTH)-1: 0]                stream_pos;
+
+   bit [$clog2(TRB_MAX_TRACES):0]              num_trc;
+   assign num_trc = 2**NTRACE_I;
 
    // Trace Register storing intermediate trace until a full data word for the
    // memory interface is collected.
-   logic [TRB_WIDTH-1:0] trace,stream;
-   assign DATA_O = trace;
+   // To handle correct assignemnt of mulitple traces at once, the trace register
+   // is extended by the maximum number of traces minimize required logic.
+   logic [TRB_WIDTH+TRB_MAX_TRACES-1:0]        trace;
+   assign DATA_O = trace[TRB_WIDTH-1:0];
+   logic [TRB_WIDTH+TRB_MAX_TRACES-1:0]        stream;
    // Serial output data validity.
    logic                                              data_valid;
 
@@ -92,9 +98,10 @@ module Tracer (
    end
    assign TRG_EVENT_O = sticky_trigger;
 
+   assign FPGA_TRACE_O = stream[trace_pos +: TRB_MAX_TRACES];
+
 
    // Switch meaning/content of FPGA_TRACE and TRIG output.
-   assign FPGA_TRACE_O = stream[trace_pos];
    always_comb begin : SWITCH_OUTPUT
       if (!MODE_I) begin
          // FPGA_TRIG_O indicates trigger event after delay.
@@ -115,8 +122,10 @@ module Tracer (
       end
       else if (EN_I) begin
          STORE_O <= 0;
-         trace[trace_pos] <= FPGA_TRACE_I;
-         trace_pos <= (trace_pos + 1) % TRB_WIDTH;
+         // Store trace signals in trace register.
+         trace[trace_pos +: TRB_MAX_TRACES] <= FPGA_TRACE_I;
+
+         trace_pos <= (trace_pos + num_trc) % TRB_WIDTH;
          if (trace_pos == TRB_WIDTH - 1) begin
             STORE_O <= 1;
          end
@@ -170,7 +179,7 @@ module Tracer (
                // Load DATA_I into stream register in position overflow.
                // Validity of data is assumed at this point.
                if (trace_pos == TRB_WIDTH - 1) begin
-                  stream <= DATA_I;
+                  stream[TRB_WIDTH-1:0] <= DATA_I;
                end
             end
          end
@@ -186,7 +195,7 @@ module Tracer (
                // Increment enable stream_pos counter only if TRIG_I signial is set.
                // TRIG_I acts essentially as load signal for the streaming logic.
                if (stream_pos < TRB_WIDTH - 1) begin
-                  stream_pos <= stream_pos + 1;
+                  stream_pos <= stream_pos + num_trc;
                end
                else begin
                   // stream_pos will overflow on next cycle with set TRIG_I.
@@ -194,7 +203,7 @@ module Tracer (
                   if (new_data) begin
                      if (FPGA_TRIG_I) begin
                         stream_pos <= 0;
-                        stream <= DATA_I;
+                        stream[TRB_WIDTH-1:0] <= DATA_I;
                      end
                   end
                   else begin

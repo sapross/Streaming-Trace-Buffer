@@ -39,9 +39,9 @@ architecture TB of TB_TRACER is
   signal store                               : std_logic;
   signal data_in, data_out                   : std_logic_vector(TRB_WIDTH - 1 downto 0);
   -- FPGA interface signals.
-  signal trace                               : std_logic;
+  signal trace                               : std_logic_vector(TRB_MAX_TRACES-1 downto 0);
   signal trig_i                              : std_logic;
-  signal dout                                : std_logic;
+  signal dout                                : std_logic_vector(TRB_MAX_TRACES-1 downto 0);
   signal trig_o                              : std_logic;
 
   -- Simulation specific signals
@@ -119,12 +119,14 @@ begin
     while true loop
 
       uniform(seed1, seed2, x);
+      for i in 0 to TRB_MAX_TRACES-1 loop
+        if (x < 0.5) then
+          trace(i) <= '0';
+        else
+          trace(i) <= '1';
+        end if;
+      end loop;
 
-      if (x < 0.5) then
-        trace <= '0';
-      else
-        trace <= '1';
-      end if;
 
       wait for CLK_PERIOD;
 
@@ -141,7 +143,7 @@ begin
     en  <= '0';
 
     mode        <= '0';
-    ntrace      <= "000";
+    ntrace      <= "01";
     delay_event <= '0';
 
     trig_i <= '0';
