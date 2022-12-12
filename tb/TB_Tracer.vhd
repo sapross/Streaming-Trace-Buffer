@@ -161,6 +161,19 @@ begin
     trig_i <= '0';
     wait for CLK_PERIOD;
 
+    wait for 100 * CLK_PERIOD;
+    rst <= '1';
+    en  <= '0';
+
+    mode        <= '1';
+    ntrace      <= "01";
+    delay_event <= '0';
+
+    trig_i <= '0';
+    wait for CLK_PERIOD;
+    rst    <= '0';
+    wait for CLK_PERIOD;
+    en     <= '1';
     wait;
   end process MAIN;
 

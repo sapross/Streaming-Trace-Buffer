@@ -49,15 +49,6 @@ module Tracer (
                output logic                      FPGA_TRIG_O
                );
 
-   typedef enum                                {
-                                                st_idle,
-                                                st_wait_for_trigger,
-                                                st_capture_trace,
-                                                st_rwmode,
-                                                st_done
-                                                } state_t;
-   state_t state, state_next;
-
    // Bit position of trigger.
    bit [$clog2(TRB_WIDTH)-1: 0]                trace_pos;
    bit [$clog2(TRB_WIDTH)-1: 0]                stream_pos;
@@ -125,8 +116,11 @@ module Tracer (
          // Store trace signals in trace register.
          trace[trace_pos +: TRB_MAX_TRACES] <= FPGA_TRACE_I;
 
-         trace_pos <= (trace_pos + num_trc) % TRB_WIDTH;
-         if (trace_pos == TRB_WIDTH - 1) begin
+         if (trace_pos < TRB_WIDTH - num_trc) begin
+            trace_pos <= (trace_pos + num_trc);
+         end
+         else begin
+            trace_pos <= 0;
             STORE_O <= 1;
          end
       end // else: !if(RST_I)
@@ -164,57 +158,65 @@ module Tracer (
       end
       else begin
          ld <= 0;
-         // Set data_valid as soon as LOAD_I from TraceLogger is set to high.
-         if (LOAD_I) begin
-            new_data <= 1;
-         end
-         if (!MODE_I) begin
-            // Tracer mode.
-            // Start requesting new data at trace position zero.
-            if (EN_I == 1) begin
+         if (EN_I == 1) begin
+            if (!MODE_I) begin
+               // Tracer mode.
+
+               // Start requesting new data at trace position zero.
                if (trace_pos == 0) begin
                   ld <= 1;
                end
-
                // Load DATA_I into stream register in position overflow.
                // Validity of data is assumed at this point.
                if (trace_pos == TRB_WIDTH - 1) begin
                   stream[TRB_WIDTH-1:0] <= DATA_I;
                end
-            end
-         end
-         else begin
+            end // if (!MODE_I)
+            else begin
+               // Stream mode.
 
-            data_valid <= 1;
-            // Request data from on stream position overflow.
-            if (stream_pos == 0 && EN_I == 1) begin
-               ld <= 1;
-            end
-
-            if (FPGA_TRIG_I) begin
-               // Increment enable stream_pos counter only if TRIG_I signial is set.
-               // TRIG_I acts essentially as load signal for the streaming logic.
-               if (stream_pos < TRB_WIDTH - 1) begin
-                  stream_pos <= stream_pos + num_trc;
+               // If new data has been received, set new_data flag.
+               if (LOAD_I) begin
+                  new_data <= 1;
                end
-               else begin
-                  // stream_pos will overflow on next cycle with set TRIG_I.
-                  // Do we have new data at DATA_I input?
-                  if (new_data) begin
-                     if (FPGA_TRIG_I) begin
-                        stream_pos <= 0;
-                        stream[TRB_WIDTH-1:0] <= DATA_I;
-                     end
+               if (!new_data) begin
+                  // Request new data from memory.
+                  ld <= 1;
+               end
+
+               if (!data_valid && new_data) begin
+                  // If new data is available load into stream register.
+                  stream[TRB_WIDTH-1:0] <= DATA_I;
+                  // Unset the flag.
+                  new_data <= 0;
+                  // Tell FPGA that output is valid.
+                  data_valid <= 1;
+               end
+
+               if (FPGA_TRIG_I && data_valid) begin
+                  if (stream_pos < TRB_WIDTH - num_trc) begin
+                     // Increment enable stream_pos counter only if TRIG_I signial is set.
+                     // TRIG_I acts essentially as load signal for the streaming logic.
+                     stream_pos <= stream_pos + num_trc;
                   end
                   else begin
-                     // Without new data, signal to FPGA serial data on FPGA_TRACE_O is
-                     // invalid.
-                     data_valid <= 0;
-                  end // else: !if(new_data)
-               end // else: !if(stream_pos < TRB_WIDTH - 1)
+                     stream_pos <= 0;
+                     if (new_data) begin
+                        // If new data is available load into stream register.
+                        stream[TRB_WIDTH-1:0] <= DATA_I;
+                        // Unset the flag.
+                        new_data <= 0;
+                        // Tell FPGA that output is valid.
+                        data_valid <= 1;
+                     end
+                     else begin
+                        data_valid <= 0;
+                     end
+                  end
+               end
+            end // else: !if(!MODE_I)
 
-            end // if (stream_pos == TRB_WIDTH - 1)
-         end // else: !if(!MODE_I)
+         end // if (EN_I == 1)
       end // else: !if(RST_I)
    end // block: STREAM_PROCESS
 
