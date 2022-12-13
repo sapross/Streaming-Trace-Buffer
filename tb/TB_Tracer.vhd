@@ -174,6 +174,13 @@ begin
     rst    <= '0';
     wait for CLK_PERIOD;
     en     <= '1';
+    wait for 3*CLK_PERIOD;
+    trig_i <= '1';
+    wait for 6*CLK_PERIOD;
+    trig_i <= '0';
+    wait for 2*CLK_PERIOD;
+    trig_i <= '1';
+
     wait;
   end process MAIN;
 

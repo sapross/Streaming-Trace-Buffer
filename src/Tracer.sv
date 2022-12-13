@@ -89,7 +89,7 @@ module Tracer (
    end
    assign TRG_EVENT_O = sticky_trigger;
 
-   assign FPGA_TRACE_O = stream[trace_pos +: TRB_MAX_TRACES];
+   assign FPGA_TRACE_O = stream[stream_pos +: TRB_MAX_TRACES];
 
 
    // Switch meaning/content of FPGA_TRACE and TRIG output.
@@ -129,17 +129,18 @@ module Tracer (
    // Stream register loading from memory.
    // Load pulse generation.
    logic       ld;
-   logic [1:0] ld_reg;
+   logic       ld_prev;
    always_ff @(posedge FPGA_CLK_I) begin : LOAD_PULSE
-      ld_reg = {ld_reg[0], ld};
+      ld_prev = ld;
    end
+
    always_comb begin
       if (!MODE_I) begin
          LOAD_O = STORE_O;
       end
       else begin
-         // Only set LOAD_O to high on a positive edge in ld_reg.
-         LOAD_O  = ~ld_reg[1] & ld_reg[0];
+         // Only set LOAD_O to high on a positive edge in ld_prev.
+         LOAD_O  = ~ld_prev & ld;
       end
    end
 
@@ -161,7 +162,7 @@ module Tracer (
          if (EN_I == 1) begin
             if (!MODE_I) begin
                // Tracer mode.
-
+               stream_pos <= trace_pos;
                // Start requesting new data at trace position zero.
                if (trace_pos == 0) begin
                   ld <= 1;
@@ -179,12 +180,12 @@ module Tracer (
                if (LOAD_I) begin
                   new_data <= 1;
                end
-               if (!new_data) begin
-                  // Request new data from memory.
+               else if (!new_data) begin
+                  // Otherwise request data from memory if not new..
                   ld <= 1;
                end
 
-               if (!data_valid && new_data) begin
+               if (!data_valid && (new_data || LOAD_I)) begin
                   // If new data is available load into stream register.
                   stream[TRB_WIDTH-1:0] <= DATA_I;
                   // Unset the flag.
