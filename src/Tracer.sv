@@ -26,15 +26,15 @@ module Tracer (
 
                // Outgoing signals to the system interface.
                // Position of the event in the word width of the memory.
-               output logic [TRB_WIDTH-1:0]      EVENT_POS_O,
+               output logic [$clog2(TRB_WIDTH)-1:0]      EVENT_POS_O,
                // Signal denoting, whether event has occured and delay timer has run out.
                output logic                      TRG_EVENT_O,
                // Trace register to be stored in memory.
                output logic [TRB_WIDTH-1:0]      DATA_O,
                // Trigger storing of data and status.
                output logic                      STORE_O,
-               // Signal for loading data from memory.
-               output logic                      LOAD_O,
+               // Signal for requesting data from memory.
+               output logic                      REQ_O,
 
                // Signals of the FPGA facing side.
                input logic                       FPGA_CLK_I,
@@ -136,11 +136,11 @@ module Tracer (
 
    always_comb begin
       if (!MODE_I) begin
-         LOAD_O = STORE_O;
+         REQ_O = STORE_O;
       end
       else begin
-         // Only set LOAD_O to high on a positive edge in ld_prev.
-         LOAD_O  = ~ld_prev & ld;
+         // Only set REQ_O to high on a positive edge in ld_prev.
+         REQ_O  = ~ld_prev & ld;
       end
    end
 
