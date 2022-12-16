@@ -10,29 +10,108 @@
 
 import DTB_PKG::*;
 
-class trace_transaction;
+// --------------------------------------------------------------------
+// Transactions
+// --------------------------------------------------------------------
+class InTX;
+   logic mode;
    bit [TRB_NTRACE_BITS-1:0]  num_traces;
-   rand logic [TRB_WIDTH-1:0] traces [TRB_MAX_TRACES-1:0];
-   logic [TRB_WIDTH-1:0]      data;
-   logic                      store;
+   logic                      pre_trigger_event;
+
+   logic [TRB_WIDTH-1:0]      data_in;
+   logic                      load;
+
+   rand logic                 trace [TRB_WIDTH-1:0];
+   logic                      trigger [TRB_WIDTH-1:0];
 
    function void display(string name);
       $display("------------------------");
       $display("- %s ", name);
       $display("------------------------");
-      $display("- num_traces %0d ", num_traces);
-      for (int i =0; i< TRB_MAX_TRACES; i++) begin
-         $display("- trace[%0d] = %32b ", i,traces[i]);
+      if (mode) begin
+         $display("- mode: tracer");
       end
-      $display("- data %0h ", data);
-      $display("- store %0d" , store);
+      else begin
+         $display("- mode: stream");
+      end
+      $display("- num_traces %0d ", num_traces);
+      $display("- pre_trigger_event %0d ", pre_trigger_event);
+      $display("- trace = %32b ", trace);
+      $display("- data_in = %8h", data_in);
+      $display("- load = %32b ", load );
+
       $display("------------------------");
    endfunction // display
 
-endclass // transaction
+endclass // InTX
 
+class OutTX;
+
+   logic [$clog2(TRB_WIDTH)-1:0] event_pos;
+   logic                         trigger_event;
+
+   logic [TRB_WIDTH-1:0]         data_out;
+   logic [TRB_WIDTH-1:0]         store;
+   logic [TRB_WIDTH-1:0]         request;
+
+   logic [TRB_WIDTH-1:0]         trace;
+   logic [TRB_WIDTH-1:0]         trigger;
+
+   function void display(string name);
+      $display("------------------------");
+      $display("- %s ", name);
+      $display("------------------------");
+      $display("- event_pos %0d ", event_pos);
+      $display("- trigger_event %0d ", trigger_event);
+
+      $display("- data_out = %8h", data_out);
+      $display("- store = %32b ", store );
+      $display("- request = %32b ", request );
+
+      $display("- trace = %32b ", trace);
+      $display("- trigger = %32b ", trigger);
+      $display("------------------------");
+   endfunction // display
+
+endclass // OutTX
+
+// --------------------------------------------------------------------
+// Interface
+// --------------------------------------------------------------------
+interface intf(
+               input logic clk,reset
+               );
+   // Control signals
+   logic                      enable;
+   logic                      mode;
+   bit [TRB_NTRACE_BITS-1:0]  num_traces;
+   logic                      pre_trigger_event;
+
+   logic [$clog2(TRB_WIDTH)-1:0] event_pos;
+   logic                         trigger_event;
+
+   //FPGA signals
+   logic                         trigger;
+   logic                         trigger_out;
+   logic [TRB_MAX_TRACES-1:0]    trace;
+   logic                         trace_out;
+
+
+   // Memory interface signals
+   logic [TRB_WIDTH-1:0]         data_out;
+   logic                         store;
+   logic                         req;
+
+   logic [TRB_WIDTH-1:0]         data_in;
+   logic                         load;
+
+endinterface // intf
+
+// --------------------------------------------------------------------
+// Generator
+// --------------------------------------------------------------------
 class generator;
-   rand trace_transaction trans;
+   rand InTX trans;
    mailbox gen2driv;
    event   ended;
 
@@ -55,32 +134,15 @@ class generator;
 
 endclass // generator
 
-interface intf(
-               input logic clk,reset
-               );
-
-   logic [TRB_MAX_TRACES-1:0] trace;
-   logic [TRB_WIDTH-1:0]      data;
-
-   logic                      enable;
-   logic                      mode;
-   bit [TRB_NTRACE_BITS-1:0]  num_traces;
-
-   logic                      store;
-
-endinterface // intf
-
+// --------------------------------------------------------------------
+// Driver
+// --------------------------------------------------------------------
 class driver;
 
    virtual                    intf vif;
-
    mailbox                    gen2driv;
-
    int                        num_transactions;
-
    semaphore                  s;
-
-
 
    function new(virtual intf vif, mailbox gen2driv);
       this.vif = vif;
@@ -101,14 +163,19 @@ class driver;
 
    task main;
       forever begin
-         trace_transaction trans;
+         InTX trans;
          gen2driv.get(trans);
          vif.num_traces = trans.num_traces;
          @(posedge vif.clk);
          vif.enable = 1;
-         for (int i =0; i< (TRB_WIDTH/2**vif.num_traces); i++) begin
+         for (int i =0; i<TRB_WIDTH; i=i+2**vif.num_traces) begin
             for (int j = 0; j< TRB_MAX_TRACES; j++) begin
-               vif.trace[j] = trans.traces[j][i];
+               if ( j< vif.num_traces ) begin
+                  vif.trace[j] = trans.trace[i+j];
+               end
+               else begin
+                  vif.trace[j] = 0;
+               end
             end
             s.put();
             @(posedge vif.clk);
@@ -124,6 +191,9 @@ class driver;
 
 endclass // driver
 
+// --------------------------------------------------------------------
+// Monitor
+// --------------------------------------------------------------------
 class monitor;
    virtual intf vif;
 
@@ -139,7 +209,7 @@ class monitor;
    task main;
       forever begin
 
-         trace_transaction trans;
+         InTX trans;
          trans = new();
 
          wait(vif.enable);
@@ -147,7 +217,7 @@ class monitor;
             d.get();
             @(posedge vif.clk);
             for(int j = 0; j< TRB_MAX_TRACES; j++) begin
-               trans.traces[j][i] = vif.trace[j];
+               trans.trace[j][i] = vif.trace[j];
             end
          end
          trans.store = vif.store;
@@ -161,6 +231,9 @@ class monitor;
 
 endclass // monitor
 
+// --------------------------------------------------------------------
+// Scoreboard
+// --------------------------------------------------------------------
 class scoreboard;
    mailbox mon2scb;
    int     num_transactions;
@@ -170,12 +243,12 @@ class scoreboard;
 
    logic [TRB_WIDTH-1:0] expectation= '0;
    task main;
-      trace_transaction trans;
+      InTX trans;
       forever begin
          mon2scb.get(trans);
          for (int i = 0; i< TRB_WIDTH; i = i + 2**trans.num_traces) begin
             for (int j = 0; j<2**trans.num_traces; j++) begin
-               expectation[i+j] = trans.traces[j][i];
+               expectation[i+j] = trans.trace[j][i];
             end
          end
          if(expectation == trans.data) begin
@@ -189,6 +262,9 @@ class scoreboard;
 
 endclass // scoreboard
 
+// --------------------------------------------------------------------
+// Environment
+// --------------------------------------------------------------------
 class environment;
 
    generator gen;
@@ -241,6 +317,9 @@ class environment;
 
 endclass // environment
 
+// --------------------------------------------------------------------
+// Test Program
+// --------------------------------------------------------------------
 program test(intf vif);
 
    environment env;
@@ -257,8 +336,9 @@ program test(intf vif);
 
 endprogram // test
 
-
-
+// --------------------------------------------------------------------
+// Testbench Module
+// --------------------------------------------------------------------
 module TB_TRACER (/*AUTOARG*/ ) ;
 
    logic clk;

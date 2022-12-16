@@ -11,42 +11,42 @@ import DTB_PKG::*;
 
 module Tracer (
                // Signals & config from the system interface.
-               input logic                       RST_I,
-               input logic                       EN_I,
+               input logic                          RST_I,
+               input logic                          EN_I,
                // Mode bit switches from trace-buffer to data-streaming mode.
-               input logic                       MODE_I,
+               input logic                          MODE_I,
                // Number of traces captured in parallel.
-               input bit [TRB_NTRACE_BITS-1:0]   NTRACE_I,
+               input bit [TRB_NTRACE_BITS-1:0]      NTRACE_I,
                // Trigger Event after delay.
-               input logic                       TRG_EVENT_I,
+               input logic                          TRG_EVENT_I,
                // Data from memory.
-               input logic [TRB_WIDTH-1:0]       DATA_I,
+               input logic [TRB_WIDTH-1:0]          DATA_I,
                // Load signal triggering capture of input data.
-               input logic                       LOAD_I,
+               input logic                          LOAD_I,
 
                // Outgoing signals to the system interface.
                // Position of the event in the word width of the memory.
-               output logic [$clog2(TRB_WIDTH)-1:0]      EVENT_POS_O,
+               output logic [$clog2(TRB_WIDTH)-1:0] EVENT_POS_O,
                // Signal denoting, whether event has occured and delay timer has run out.
-               output logic                      TRG_EVENT_O,
+               output logic                         TRG_EVENT_O,
                // Trace register to be stored in memory.
-               output logic [TRB_WIDTH-1:0]      DATA_O,
+               output logic [TRB_WIDTH-1:0]         DATA_O,
                // Trigger storing of data and status.
-               output logic                      STORE_O,
+               output logic                         STORE_O,
                // Signal for requesting data from memory.
-               output logic                      REQ_O,
+               output logic                         REQ_O,
 
                // Signals of the FPGA facing side.
-               input logic                       FPGA_CLK_I,
+               input logic                          FPGA_CLK_I,
                // Trigger signal.
-               input logic                       FPGA_TRIG_I,
+               input logic                          FPGA_TRIG_I,
                // Trace input and output. Allows for daisy-chaining STBs and serial
                // data streaming from system interface
-               input logic [TRB_MAX_TRACES-1:0]  FPGA_TRACE_I,
-               output logic [TRB_MAX_TRACES-1:0] FPGA_TRACE_O,
+               input logic [TRB_MAX_TRACES-1:0]     FPGA_TRACE_I,
+               output logic [TRB_MAX_TRACES-1:0]    FPGA_TRACE_O,
                // Set to high after trigger event with delay. Usable for daisy-chaining.
                // Indicates whether data is valid in streaming mode.
-               output logic                      FPGA_TRIG_O
+               output logic                         FPGA_TRIG_O
                );
 
    // Bit position of trigger.
