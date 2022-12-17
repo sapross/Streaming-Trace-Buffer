@@ -13,16 +13,19 @@ import DTB_PKG::*;
 // --------------------------------------------------------------------
 // Transactions
 // --------------------------------------------------------------------
+// Input transaction on FPGA side.
 class InTX;
    logic mode;
-   bit [TRB_NTRACE_BITS-1:0]  num_traces;
-   logic                      pre_trigger_event;
+   bit [TRB_NTRACE_BITS-1:0] num_traces;
+   logic                     pre_trigger_event;
 
-   logic [TRB_WIDTH-1:0]      data_in;
-   logic                      load;
+   rand logic [TRB_MAX_TRACES-1:0] trace;
+   rand logic                           trigger;
+   rand logic                           read;
 
-   rand logic                 trace [TRB_WIDTH-1:0];
-   logic                      trigger [TRB_WIDTH-1:0];
+
+   rand logic [TRB_WIDTH-1:0]           data_in;
+   logic                           load;
 
    function void display(string name);
       $display("------------------------");
@@ -36,26 +39,28 @@ class InTX;
       end
       $display("- num_traces %0d ", num_traces);
       $display("- pre_trigger_event %0d ", pre_trigger_event);
-      $display("- trace = %32b ", trace);
-      $display("- data_in = %8h", data_in);
-      $display("- load = %32b ", load );
 
+      $display("- trace = %8b ", trace);
+      $display("- trigger %0b ", trigger);
+      $display("- read = %0b ", read );
+
+      $display("- data_in = %8h", data_in);
+      $display("- load = %0b ", load );
       $display("------------------------");
    endfunction // display
 
-endclass // InTX
 
 class OutTX;
 
    logic [$clog2(TRB_WIDTH)-1:0] event_pos;
-   logic                         trigger_event;
+   logic                       trigger_event;
 
-   logic [TRB_WIDTH-1:0]         data_out;
-   logic [TRB_WIDTH-1:0]         store;
-   logic [TRB_WIDTH-1:0]         request;
+   logic [TRB_MAX_TRACES-1:0]    stream;
+   logic                         trigger;
 
-   logic [TRB_WIDTH-1:0]         trace;
-   logic [TRB_WIDTH-1:0]         trigger;
+   logic [TRB_WIDTH -1:0]     data_out;
+   logic                      store;
+   logic                      request;
 
    function void display(string name);
       $display("------------------------");
@@ -64,53 +69,53 @@ class OutTX;
       $display("- event_pos %0d ", event_pos);
       $display("- trigger_event %0d ", trigger_event);
 
-      $display("- data_out = %8h", data_out);
-      $display("- store = %32b ", store );
-      $display("- request = %32b ", request );
+      $display("- stream = %32b ", stream);
+      $display("- trigger = %0b ", trigger);
 
-      $display("- trace = %32b ", trace);
-      $display("- trigger = %32b ", trigger);
+      $display("- data_out = %8h", data_out);
+      $display("- store = %0b ", store );
+      $display("- request = %0b ", request );
       $display("------------------------");
    endfunction // display
-
 endclass // OutTX
 
 // --------------------------------------------------------------------
-// Interface
+// Interfaces
 // --------------------------------------------------------------------
-interface intf(
-               input logic clk,reset
-               );
+
+interface Interface(
+                    input logic clk,reset
+                    );
    // Control signals
-   logic                      enable;
-   logic                      mode;
-   bit [TRB_NTRACE_BITS-1:0]  num_traces;
-   logic                      pre_trigger_event;
+   logic                        enable;
+   logic                        mode;
+   bit [TRB_NTRACE_BITS-1:0]    num_traces;
+   logic                        pre_trigger_event;
 
    logic [$clog2(TRB_WIDTH)-1:0] event_pos;
    logic                         trigger_event;
 
    //FPGA signals
    logic                         trigger;
-   logic                         trigger_out;
    logic [TRB_MAX_TRACES-1:0]    trace;
-   logic                         trace_out;
-
+   logic                         trigger_out;
+   logic                         read;
+   logic [TRB_MAX_TRACES-1:0]    stream;
 
    // Memory interface signals
-   logic [TRB_WIDTH-1:0]         data_out;
-   logic                         store;
-   logic                         req;
+   logic [TRB_WIDTH-1:0]      data_out;
+   logic                      store;
+   logic                      req;
 
-   logic [TRB_WIDTH-1:0]         data_in;
-   logic                         load;
+   logic [TRB_WIDTH-1:0]      data_in;
+   logic                      load;
 
 endinterface // intf
 
 // --------------------------------------------------------------------
 // Generator
 // --------------------------------------------------------------------
-class generator;
+class Generator;
    rand InTX trans;
    mailbox gen2driv;
    event   ended;
@@ -120,6 +125,26 @@ class generator;
    function new(mailbox gen2driv);
       this.gen2driv = gen2driv;
    endfunction // new
+
+   task test_tracemode_ntrace();
+      $display("[ Generator ] ------------------")
+      for (int ntrace=0; ntrace < TRB_MAX_TRACES; ntrace++) begin
+         for (int bits=0; bits < TRB_WIDTH; bits = bits + 2**ntrace) begin
+            trans = new();
+            trans.randomize();
+            trans.mode = 0;
+            trans.num_traces = ntrace;
+            trans.pre_trigger_event = 0;
+            trans.trigger = rand();
+            trans.read = 0;
+            trans.data_in = '0;
+            trans.load = 0;
+
+            gen2driv.put(trans);
+         end
+      end
+   endtask // test01
+
 
    task main();
       repeat(repeat_count) begin
@@ -132,14 +157,14 @@ class generator;
       -> ended;
    endtask // main
 
-endclass // generator
+endclass // Generator
 
 // --------------------------------------------------------------------
 // Driver
 // --------------------------------------------------------------------
-class driver;
+class Driver;
 
-   virtual                    intf vif;
+   virtual                    Interface vif;
    mailbox                    gen2driv;
    int                        num_transactions;
    semaphore                  s;
@@ -189,12 +214,12 @@ class driver;
       end // forever begin
    endtask // drive
 
-endclass // driver
+endclass // Driver
 
 // --------------------------------------------------------------------
 // Monitor
 // --------------------------------------------------------------------
-class monitor;
+class Monitor;
    virtual intf vif;
 
    mailbox mon2scb;
@@ -229,12 +254,12 @@ class monitor;
       end
    endtask // main
 
-endclass // monitor
+endclass // Monitor
 
 // --------------------------------------------------------------------
 // Scoreboard
 // --------------------------------------------------------------------
-class scoreboard;
+class Scoreboard;
    mailbox mon2scb;
    int     num_transactions;
    function new(mailbox mon2scb);
@@ -260,17 +285,17 @@ class scoreboard;
       end // forever begin
    endtask // main
 
-endclass // scoreboard
+endclass // Scoreboard
 
 // --------------------------------------------------------------------
 // Environment
 // --------------------------------------------------------------------
-class environment;
+class Environment;
 
-   generator gen;
-   driver driv;
-   monitor mon;
-   scoreboard scb;
+   Generator gen;
+   Driver driv;
+   Monitor mon;
+   Scoreboard scb;
 
    mailbox gen2driv;
    mailbox mon2scb;
@@ -315,14 +340,14 @@ class environment;
       $finish();
    endtask // run
 
-endclass // environment
+endclass // Environment
 
 // --------------------------------------------------------------------
 // Test Program
 // --------------------------------------------------------------------
 program test(intf vif);
 
-   environment env;
+   Environment env;
    semaphore sema;
 
    initial begin
