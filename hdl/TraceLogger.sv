@@ -23,17 +23,17 @@ module TraceLogger (
                     // can be performed in the current cycle.
                     input logic                             RW_TURN_I,
                     // Signal write intend to memory.
-                    output logic                            WRITE_O;
+                    output logic                            WRITE_O,
                     // Signals to indicate whether reading/writing is possible.
-                    input logic                             WALLOW_I;
-                    input logic                             RALLOW_I;
+                    input logic                             WALLOW_I,
+                    input logic                             RALLOW_I,
 
                     // Read&Write Pointers with associated data ports.
                     output logic [$clog2(TRB_DEPTH)-1:0]    READ_PTR_O,
-                    input [TRB_WIDTH-1:0]                   DMEM_I;
+                    input [TRB_WIDTH-1:0]                   DMEM_I,
 
                     output logic [$clog2(TRB_DEPTH)-1:0]    WRITE_PTR_O,
-                    output [TRB_WIDTH-1:0]                  DMEM_O;
+                    output [TRB_WIDTH-1:0]                  DMEM_O,
 
                     // --- To Tracer ----
                     // Signals passed into the tracer (potentially through CDC).
@@ -212,156 +212,5 @@ module TraceLogger (
          end
       end
    end
-
-
-
-   typedef enum {
-                 st_w_idle,
-                 st_w_write,
-                 st_w_wait_turn
-                 } write_state_t;
-   write_state_t wstate, wstate_next;
-
-   always_ff @(posedge CLK_I) begin : WRITE_FSM_CORE
-      if(!RST_NI) begin
-         wstate <= st_w_idle;
-      end
-      else begin
-         wstate <= wstate_next;
-      end
-   end
-
-   always_comb begin : WRITE_FSM
-      if(!RST_NI) begin
-         wstate_next = st_w_idle;
-      end
-      else begin
-         wstate_next = wstate;
-         case (wstate)
-           st_w_idle: begin
-              if (STORE_I) begin
-                 if ()
-           end
-           st_w_write: begin
-
-           end
-           st_w_wait_turn: begin
-
-           end
-         endcase // case (wstate)
-
-         
-      end
-
-   end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   typedef enum {
-                 st_idle,
-                 st_rw_memory,
-                 st_write_trace
-                 } state_t;
-   state_t state, state_next;
-
-
-   logic [TRB_WIDTH-1:0] word, word_next;
-   assign DMEM_O = word;
-
-   logic                 store, store_next;
-
-   // Store signal is gated by trigger event. The moment word_counter has run out
-   // subsequent writes to memory are supressed.
-   assign STORE_O = store & ~stat.trg_event;
-
-   always_ff (@posedge CLK_I)  begin : FSM_CORE
-      if (!RST_NI) begin
-         state <= st_idle;
-         word <= '0;
-         ptr <= 0;
-         store <= 0;
-      end
-      else begin
-         state <= state_next;
-         word <= word_next;
-         ptr <= ptr_next;
-         store <= store_next;
-      end // else: !if(!RST_NI)
-   end // block: FSM_CORE
-
-   // State Machine controlling read&write to memory.
-   always_comb begin : FSM
-      RW_O = 0;
-      if (!RST_NI) begin
-         state_next = st_idle;
-         word_next = '0;
-      end
-      else begin
-
-         state_next = state;
-         word_next = word;
-         store_next = 0;
-
-         case (state)
-           // Waiting for load from tracer.
-           st_idle: begin
-              //  For every store (load signal here) issued by the Tracer,
-              //  the write pointer is incremented and data from
-              //  the Tracer registerd.
-              if (LOAD_I) begin
-                 word_next = DATA_I;
-                 state_next = st_rw_memory;
-                 ptr_next = (ptr_next + 1 ) % TRB_DEPTH;
-              end
-           end
-           // Exchange trace with word from memory.
-           st_rw_memory: begin
-              // Signal intent to exchange one word with memory.
-              RW_O = 1;
-              // Continue if memory signals that it's the TraceLoggers turn to
-              // RW.
-              if (RW_TURN_I = 1) begin
-                 state_next = st_idle;
-                 // Store word from memory in register.
-                 word_next = DMEM_I;
-                 // Write registered word back to tracer.
-                 store_next = 1;
-              end
-         endcase // case (state)
-      end // else: !if(!RST_NI)
-   end // block: FSM
 
 endmodule // TraceLogger
