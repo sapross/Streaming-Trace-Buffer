@@ -19,7 +19,7 @@ module Tracer (
                // Number of traces captured in parallel.
                input bit [TRB_NTRACE_BITS-1:0]      NTRACE_I,
                // Trigger Event after delay.
-               input logic                          TRG_EVENT_I,
+               input logic                          TRG_DELAYED_I,
                // Position of the event in the word width of the memory.
                output logic [$clog2(TRB_WIDTH)-1:0] EVENT_POS_O,
                // Signal denoting, whether event has occured and delay timer has run out.
@@ -28,6 +28,8 @@ module Tracer (
                // ---- Memory IO -----
                // Data from memory.
                input logic [TRB_WIDTH-1:0]          DATA_I,
+               // Signal for requesting data from memory.
+               output logic                         REQ_O,
                // Load signal triggering capture of input data.
                input logic                          LOAD_I,
 
@@ -35,8 +37,6 @@ module Tracer (
                output logic [TRB_WIDTH-1:0]         DATA_O,
                // Trigger storing of data and status.
                output logic                         STORE_O,
-               // Signal for requesting data from memory.
-               output logic                         REQ_O,
 
                // ---- FPGA signals ----
                // Signals of the FPGA facing side.
@@ -53,6 +53,14 @@ module Tracer (
                // Indicates whether data is valid in streaming mode.
                output logic                         FPGA_TRIG_O
                );
+
+   // Delayed idle bit required to prevent immediate incement of trace_pos on
+   // set enable.
+   logic                                            idle;
+   always_ff @(posedge FPGA_CLK_I) begin
+      idle <= ~EN_I;
+   end
+
 
    // Bit position of trigger.
    bit [$clog2(TRB_WIDTH)-1: 0]                trace_pos;
@@ -116,7 +124,7 @@ module Tracer (
          STORE_O <= 0;
          trace_pos <= 0;
       end
-      else if (EN_I) begin
+      else if (EN_I && !idle) begin
          STORE_O <= 0;
          // Store trace signals in trace register.
          trace[trace_pos +: TRB_MAX_TRACES] <= FPGA_TRACE_I;
@@ -133,24 +141,39 @@ module Tracer (
 
    // Stream register loading from memory.
    // Load pulse generation.
-   logic       ld;
-   logic       ld_prev;
+   logic       req;
+   logic       req_prev;
    always_ff @(posedge FPGA_CLK_I) begin : LOAD_PULSE
-      ld_prev = ld;
-   end
-
-   always_comb begin
-      if (!MODE_I) begin
-         REQ_O = STORE_O;
+      if (RST_I) begin
+         req_prev = 0;
       end
       else begin
-         // Only set REQ_O to high on a positive edge in ld_prev.
-         REQ_O  = ~ld_prev & ld;
+         req_prev = req;
       end
    end
-
+   assign  REQ_O  = ~req_prev & req;
 
    logic new_data;
+   always_comb  begin
+      if (EN_I && !idle) begin
+         if (!MODE_I) begin
+            // Start requesting new data at stream_pos position zero.
+            if (stream_pos == 0) begin
+               req = 1;
+            end
+            else begin
+               req = 0;
+            end
+         end
+         else begin
+            // In streaming mode, always request more data if consumed.
+            req = ~new_data;
+         end
+      end
+      else begin
+         req = 0;
+      end
+   end
 
    always_ff @(posedge FPGA_CLK_I) begin : STREAM_PROCESS
       if (RST_I) begin
@@ -159,38 +182,28 @@ module Tracer (
 
          new_data <= 0;
          data_valid <= 0;
-         ld <= 0;
 
       end
       else begin
-         ld <= 0;
-         if (EN_I == 1) begin
+         if (EN_I && !idle) begin
+            if (LOAD_I) begin
+               new_data <= 1;
+            end
             if (!MODE_I) begin
                // Tracer mode.
                stream_pos <= trace_pos;
-               // Start requesting new data at trace position zero.
-               if (trace_pos == 0) begin
-                  ld <= 1;
-               end
                // Load DATA_I into stream register in position overflow.
-               // Validity of data is assumed at this point.
-               if (trace_pos == TRB_WIDTH - 1) begin
+               if (trace_pos == 0 && new_data) begin
                   stream[TRB_WIDTH-1:0] <= DATA_I;
+                  new_data = 0;
                end
             end // if (!MODE_I)
             else begin
                // Stream mode.
 
                // If new data has been received, set new_data flag.
-               if (LOAD_I) begin
-                  new_data <= 1;
-               end
-               else if (!new_data) begin
-                  // Otherwise request data from memory if not new..
-                  ld <= 1;
-               end
 
-               if (!data_valid && (new_data || LOAD_I)) begin
+               if (!data_valid && new_data) begin
                   // If new data is available load into stream register.
                   stream[TRB_WIDTH-1:0] <= DATA_I;
                   // Unset the flag.
@@ -199,9 +212,9 @@ module Tracer (
                   data_valid <= 1;
                end
 
-               if (FPGA_TRIG_I && data_valid) begin
+               if (FPGA_READ_I && data_valid) begin
                   if (stream_pos < TRB_WIDTH - num_trc) begin
-                     // Increment enable stream_pos counter only if TRIG_I signial is set.
+                     // Increment EN_I stream_pos counter only if TRIG_I signial is set.
                      // TRIG_I acts essentially as load signal for the streaming logic.
                      stream_pos <= stream_pos + num_trc;
                   end

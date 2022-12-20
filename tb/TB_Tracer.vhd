@@ -31,7 +31,7 @@ architecture TB of TB_TRACER is
   signal ntrace                              : std_logic_vector(TRB_MAX_TRACES_BITS - 1 downto 0);
   signal mode                                : std_logic;
   signal delay_event                         : std_logic;
-  signal event_pos                           : std_logic_vector(TRB_WIDTH-1 downto 0);
+  signal event_pos                           : std_logic_vector(4 downto 0);
   signal trg_event                           : std_logic;
   -- Memory interface signals
   signal ld_i                                : std_logic;
@@ -42,6 +42,7 @@ architecture TB of TB_TRACER is
   signal trace                               : std_logic_vector(TRB_MAX_TRACES-1 downto 0);
   signal trig_i                              : std_logic;
   signal dout                                : std_logic_vector(TRB_MAX_TRACES-1 downto 0);
+  signal read                                : std_logic;
   signal trig_o                              : std_logic;
 
   -- Simulation specific signals
@@ -66,11 +67,12 @@ begin
       TRG_EVENT_O  => trg_event,
       DATA_O       => data_out,
       STORE_O      => store,
-      LOAD_O       => ld_o,
+      REQ_O       => ld_o,
       FPGA_CLK_I   => clk,
       FPGA_TRIG_I  => trig_i,
       FPGA_TRACE_I => trace,
-      FPGA_TRACE_O => dout,
+      FPGA_STREAM_O => dout,
+      FPGA_READ_I  => read,
       FPGA_TRIG_O  => trig_o
     );
 
@@ -169,17 +171,17 @@ begin
     ntrace      <= "01";
     delay_event <= '0';
 
-    trig_i <= '0';
+    read <= '0';
     wait for CLK_PERIOD;
     rst    <= '0';
     wait for CLK_PERIOD;
     en     <= '1';
     wait for 3*CLK_PERIOD;
-    trig_i <= '1';
+    read <= '1';
     wait for 6*CLK_PERIOD;
-    trig_i <= '0';
+    read <= '0';
     wait for 2*CLK_PERIOD;
-    trig_i <= '1';
+    read <= '1';
 
     wait;
   end process MAIN;
