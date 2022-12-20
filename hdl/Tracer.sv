@@ -18,12 +18,12 @@ module Tracer (
                input logic                          MODE_I,
                // Number of traces captured in parallel.
                input bit [TRB_NTRACE_BITS-1:0]      NTRACE_I,
-               // Trigger Event after delay.
-               input logic                          TRG_DELAYED_I,
                // Position of the event in the word width of the memory.
                output logic [$clog2(TRB_WIDTH)-1:0] EVENT_POS_O,
                // Signal denoting, whether event has occured and delay timer has run out.
                output logic                         TRG_EVENT_O,
+               // Trigger Event after delay.
+               input logic                          TRG_DELAYED_I,
 
                // ---- Memory IO -----
                // Data from memory.
