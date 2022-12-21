@@ -25,8 +25,8 @@ module TraceLogger (
                     // Signal write intend to memory.
                     output logic                            WRITE_O,
                     // Signals to indicate whether reading/writing is possible.
-                    input logic                             WALLOW_I,
-                    input logic                             RALLOW_I,
+                    input logic                             WRITE_ALLOW_I,
+                    input logic                             READ_ALLOW_I,
 
                     // Read&Write Pointers with associated data ports.
                     output logic [$clog2(TRB_DEPTH)-1:0]    READ_PTR_O,
@@ -57,16 +57,17 @@ module TraceLogger (
                     // Data from memory.
                     output logic [TRB_WIDTH-1:0]            DATA_O,
                     // Tracer request of new data from memory.
-                    input logic                             REQ_I,
+                    input logic                             LOAD_REQUEST_I,
                     // Signal to Tracer that read has been granted.
-                    output logic                            LOAD_O,
+                    output logic                            LOAD_GRANT_O,
 
                     // Trace exchange
                     // Trace register to be stored in memory.
                     input logic [TRB_WIDTH-1:0]             DATA_I,
                     // Load signal triggering capture of data from Tracer.
-                    input logic                             STORE_I
-
+                    input logic                             STORE_I,
+                    // Signal to determine whether writing the trace is currently permissible.
+                    output logic                            STORE_PERM_O
                     );
 
 
@@ -151,7 +152,7 @@ module TraceLogger (
 
    logic read_valid;
    always_comb begin
-      if((read_ptr+1)%TRB_WIDTH != write_ptr) begin
+      if(read_ptr != write_ptr) begin
          read_valid = 1;
       end
       else begin
@@ -159,9 +160,11 @@ module TraceLogger (
       end
    end
 
+   // Writing becomes invalid if the next pointer value equals the read pointer or
+   // the delayed trg_event is set.
    logic write_valid;
    always_comb begin
-      if (write_ptr != read_ptr) begin
+      if ((write_ptr+1)%TRB_WIDTH  != read_ptr && !stat.trg_event) begin
          write_valid = 1;
       end
       else begin
@@ -176,14 +179,16 @@ module TraceLogger (
          write_ptr <= 1;
       end
       else begin
-         if (STORE_I) begin
-            pending_write <= 1;
-            DMEM_O <= DATA_I;
-         end
-         else begin
-            if (pending_write && RW_TURN_I) begin
-               pending_write <= 0;
-               write_ptr <= (write_ptr + 1) % TRB_WIDTH;
+         if (write_valid) begin
+            if (STORE_I) begin
+               pending_write <= 1;
+               DMEM_O <= DATA_I;
+            end
+            else begin
+               if (pending_write && RW_TURN_I) begin
+                  pending_write <= 0;
+                  write_ptr <= (write_ptr + 1) % TRB_WIDTH;
+               end
             end
          end
       end
@@ -199,15 +204,17 @@ module TraceLogger (
       end
       else begin
          LOAD_O <= 0;
-         if (REQ_I) begin
-            pending_read <= 1;
-         end
-         else begin
-            if (pending_read && RW_TURN_I) begin
-               pending_read <= 0;
-               DATA_O <= DMEM_I;
-               LOAD_O <= 1;
-               read_ptr <= (read_ptr + 1) % TRB_WIDTH;
+         if (read_valid) begin
+            if (REQ_I) begin
+               pending_read <= 1;
+            end
+            else begin
+               if (pending_read && RW_TURN_I) begin
+                  pending_read <= 0;
+                  DATA_O <= DMEM_I;
+                  LOAD_O <= 1;
+                  read_ptr <= (read_ptr + 1) % TRB_WIDTH;
+               end
             end
          end
       end
