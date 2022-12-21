@@ -58,8 +58,11 @@ module Tracer (
                output logic                         FPGA_TRIG_O
                );
 
-   // Delayed idle bit required to prevent immediate incement of trace_pos on
-   // set enable.
+   // --------------------------------------------------------------------
+   // ------ CONTROL AND STATUS -------
+   // --------------------------------------------------------------------
+   // Delayed idle bit required to prevent immediate increment of position
+   // counters directly after reset.
    logic                                            start;
    always_ff @(posedge FPGA_CLK_I) begin
       if(RST_I) begin
@@ -70,37 +73,37 @@ module Tracer (
       end
    end
 
-
-   // Bit position of trigger.
-   bit [$clog2(TRB_WIDTH)-1: 0]                trace_pos;
-   bit [$clog2(TRB_WIDTH)-1: 0]                stream_pos;
-
    bit [$clog2(TRB_MAX_TRACES):0]              num_trc;
    assign num_trc = 2**NTRACE_I;
 
+
    // Trace Register storing intermediate trace until a full data word for the
    // memory interface is collected.
-   // To handle correct assignemnt of mulitple traces at once, the trace register
-   // is extended by the maximum number of traces minimize required logic.
+   // Size has to be extended by the maximum number of traces to prevent
+   // complex logic to handle out of bounds accesses.
    logic [TRB_WIDTH+TRB_MAX_TRACES-1:0]        trace;
    assign DATA_O = trace[TRB_WIDTH-1:0];
-   logic [TRB_WIDTH+TRB_MAX_TRACES-1:0]        stream;
-   // Serial output data validity.
+
+   // Bit position of trigger.
+   bit [$clog2(TRB_WIDTH)-1: 0]                trace_pos;
+
+   // Indicates validity of serial output for the FPGA side.
    logic                                       data_valid;
-
    // Sticky Trigger.
-   logic                                       sticky_trigger;
+   logic                                       trigger;
+   assign TRG_EVENT_O = trigger;
 
-   // Make sticky trigger sticky depending on mode.
-   always_ff @(posedge FPGA_CLK_I) begin
+   // Make sticky trigger sticky and capture trace position on
+   // trigger posedge.
+   always_ff @(posedge FPGA_CLK_I) begin : CAPTURE_POS_PROC
       if (RST_I) begin
-         sticky_trigger <= 0;
+         trigger <= 0;
          EVENT_POS_O <= 0;
       end
       else begin
-         sticky_trigger <= sticky_trigger | FPGA_TRIG_I;
+         trigger <= trigger | FPGA_TRIG_I;
          if (!MODE_I) begin
-            if (FPGA_TRIG_I && !sticky_trigger) begin
+            if (FPGA_TRIG_I && !trigger) begin
                EVENT_POS_O <= trace_pos;
             end
          end
@@ -109,16 +112,12 @@ module Tracer (
          end
       end
    end
-   assign TRG_EVENT_O = sticky_trigger;
-
-   assign FPGA_STREAM_O = stream[stream_pos +: TRB_MAX_TRACES];
-
 
    // Switch meaning/content of FPGA_TRACE and TRIG output.
    always_comb begin : SWITCH_TRIG_PURPOSE
       if (!MODE_I) begin
          // FPGA_TRIG_O indicates trigger event after delay.
-         FPGA_TRIG_O = TRG_EVENT_I;
+         FPGA_TRIG_O = TRG_DELAYED_I;
       end
       else begin
          // FPGA_TRIG_O indicates whether the stream_data is valid.
@@ -126,6 +125,9 @@ module Tracer (
       end
    end
 
+   // --------------------------------------------------------------------
+   // ------ FPGA DATA INPUT -------
+   // --------------------------------------------------------------------
    // Trace registering and storing in memory.
    always_ff @(posedge FPGA_CLK_I) begin : TRACE_PROCESS
       if (RST_I) begin
@@ -155,6 +157,18 @@ module Tracer (
          end
       end // else: !if(RST_I)
    end // block: TRACE_PROCESS
+
+   // --------------------------------------------------------------------
+   // ------ FPGA DATA OUTPUT -------
+   // --------------------------------------------------------------------
+
+   // Stream register holding data from memory for serialization.
+   // Size has to be extended by the maximum number of traces to prevent
+   // complex logic to handle out of bounds accesses.
+   logic [TRB_WIDTH+TRB_MAX_TRACES-1:0]        stream;
+   bit [$clog2(TRB_WIDTH)-1: 0]                stream_pos;
+
+   assign FPGA_STREAM_O = stream[stream_pos +: TRB_MAX_TRACES];
 
    // Stream register loading from memory.
    // Load pulse generation.
@@ -259,8 +273,7 @@ module Tracer (
                   end
                end
             end // else: !if(!MODE_I)
-
-         end // if (EN_I == 1)
+         end // if (start)
       end // else: !if(RST_I)
    end // block: STREAM_PROCESS
 
