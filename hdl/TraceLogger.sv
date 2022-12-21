@@ -30,10 +30,10 @@ module TraceLogger (
 
                     // Read&Write Pointers with associated data ports.
                     output logic [$clog2(TRB_DEPTH)-1:0]    READ_PTR_O,
-                    input [TRB_WIDTH-1:0]                   DMEM_I,
+                    input logic [TRB_WIDTH-1:0]             DMEM_I,
 
                     output logic [$clog2(TRB_DEPTH)-1:0]    WRITE_PTR_O,
-                    output [TRB_WIDTH-1:0]                  DMEM_O,
+                    output logic [TRB_WIDTH-1:0]            DMEM_O,
 
                     // --- To Tracer ----
                     // Signals passed into the tracer (potentially through CDC).
@@ -81,21 +81,22 @@ module TraceLogger (
    // Forwarding of status to Interface.
    status_t stat;
    assign STAT_O = stat;
-
-   assign stat.trg_event = TRG_EVENT_I;
    assign stat.event_pos = EVENT_POS_I;
-
+   assign TRG_DELAYED_O = stat.trg_event;
 
    // -----------------------------------------------------------------------------
    // --- (Pre-)Trigger Event Handling ---
    // -----------------------------------------------------------------------------
 
    // Address on which TRG_EVENT_I flipped from 0 to 1.
-   bit [$clog2(TRB_DEPTH)-1:0]                            event_address;
-   assign stat.evend_addr = event_address;
+   bit [$clog2(TRB_DEPTH)-1:0]                              event_address;
+   assign stat.event_addr = event_address;
 
+   // Memory write pointer
+   bit [$clog2(TRB_DEPTH)-1:0]                              write_ptr;
+   assign WRITE_PTR_O = write_ptr;
    // Registered (sticky) trg_event.
-   logic                                                  trg_event;
+   logic                                                    trg_event;
    always_ff @(posedge CLK_I) begin : SAVE_EVENT_ADDRESS
       if (!RST_NI) begin
          trg_event = 0;
@@ -141,16 +142,13 @@ module TraceLogger (
    // --- RW to memory ---
    // -----------------------------------------------------------------------------
 
-   // Memory read and write pointer.
+   // Memory read pointer.
    bit [$clog2(TRB_DEPTH)-1:0] read_ptr;
    assign READ_PTR_O = read_ptr;
-   bit [$clog2(TRB_DEPTH)-1:0] write_ptr;
-   assign WRITE_PTR_O = write_ptr;
 
-   logic pending_write;
-   assign WRITE_O = pending_write;
+   logic                       pending_write;
 
-   logic read_valid;
+   logic                       read_valid;
    always_comb begin
       if(read_ptr != write_ptr) begin
          read_valid = 1;
@@ -163,8 +161,10 @@ module TraceLogger (
    // Writing becomes invalid if the next pointer value equals the read pointer or
    // the delayed trg_event is set.
    logic write_valid;
+   assign STORE_PERM_O = write_valid;
+
    always_comb begin
-      if ((write_ptr+1)%TRB_WIDTH  != read_ptr && !stat.trg_event) begin
+      if ((write_ptr+1)%TRB_DEPTH != read_ptr && !stat.trg_event) begin
          write_valid = 1;
       end
       else begin
@@ -177,8 +177,10 @@ module TraceLogger (
          pending_write <= 0;
          DMEM_O <= '0;
          write_ptr <= 1;
+         WRITE_O <= 0;
       end
       else begin
+         WRITE_O <= 0;
          if (write_valid) begin
             if (STORE_I) begin
                pending_write <= 1;
@@ -187,7 +189,8 @@ module TraceLogger (
             else begin
                if (pending_write && RW_TURN_I) begin
                   pending_write <= 0;
-                  write_ptr <= (write_ptr + 1) % TRB_WIDTH;
+                  write_ptr <= (write_ptr + 1) % TRB_DEPTH;
+                  WRITE_O <= 1;
                end
             end
          end
@@ -195,26 +198,24 @@ module TraceLogger (
    end
 
    logic pending_read;
-   always_ff @(posedge CLK_I) begin: : READ_PROC
+   always_ff @(posedge CLK_I) begin : READ_PROC
       if (!RST_NI) begin
          pending_read <= 0;
          DATA_O <= '0;
-         LOAD_O <= 0;
+         LOAD_GRANT_O <= 0;
          read_ptr <= 0;
       end
       else begin
-         LOAD_O <= 0;
+         LOAD_GRANT_O <= 0;
          if (read_valid) begin
-            if (REQ_I) begin
+            if (LOAD_REQUEST_I) begin
                pending_read <= 1;
             end
-            else begin
-               if (pending_read && RW_TURN_I) begin
-                  pending_read <= 0;
-                  DATA_O <= DMEM_I;
-                  LOAD_O <= 1;
-                  read_ptr <= (read_ptr + 1) % TRB_WIDTH;
-               end
+            if (pending_read && RW_TURN_I) begin
+               pending_read <= 0;
+               DATA_O <= DMEM_I;
+               LOAD_GRANT_O <= 1;
+               read_ptr <= (read_ptr + 1) % TRB_DEPTH;
             end
          end
       end
