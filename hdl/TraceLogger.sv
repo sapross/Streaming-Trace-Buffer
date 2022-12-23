@@ -42,7 +42,7 @@ module TraceLogger (
                     // Mode bit switches from trace-buffer to data-streaming mode.
                     output logic                            MODE_O,
                     // Number of traces captured in parallel.
-                    output bit [$clog2(TRB_MAX_TRACES)-1:0] NTRACE_O,
+                    output bit [TRB_NTRACE_BITS-1:0] NTRACE_O,
 
 
                     // Outgoing signals to the system interface.
@@ -112,6 +112,12 @@ module TraceLogger (
    // Counter for determining the ratio of history to pre-history.
    bit [$clog2(TRB_DEPTH)-1:0] hist_count;
 
+   // Write signal.
+   logic                       write;
+   assign WRITE_O = write;
+
+
+
    always_ff @(posedge CLK_I) begin : PRE_TRIGGER_PROC
       // Only start counting down the moment a trigger event has been registered.
       if(!RST_NI || !trg_event) begin
@@ -127,12 +133,14 @@ module TraceLogger (
          stat.trg_event = 0;
       end
       else begin
-         if (hist_count != 0) begin
-            hist_count = hist_count - 1;
-            stat.trg_event = 0;
-         end
-         else begin
-            stat.trg_event = 1;
+         if (write && RW_TURN_I) begin
+            if (hist_count > 0) begin
+               hist_count = hist_count - 1;
+               stat.trg_event = 0;
+            end
+            else begin
+               stat.trg_event = 1;
+            end
          end
       end // else: !if(!RST_NI || !TRB_EVENT_I)
    end // always_ff @ (posedge CLK_I)
@@ -150,7 +158,7 @@ module TraceLogger (
 
    logic                       read_valid;
    always_comb begin
-      if(read_ptr != write_ptr) begin
+      if( READ_ALLOW_I && (read_ptr +1)%TRB_DEPTH != write_ptr) begin
          read_valid = 1;
       end
       else begin
@@ -164,7 +172,7 @@ module TraceLogger (
    assign STORE_PERM_O = write_valid;
 
    always_comb begin
-      if ((write_ptr+1)%TRB_DEPTH != read_ptr && !stat.trg_event) begin
+      if (WRITE_ALLOW_I && write_ptr != read_ptr && !stat.trg_event) begin
          write_valid = 1;
       end
       else begin
@@ -172,15 +180,14 @@ module TraceLogger (
       end
    end
 
+   assign write = pending_write & RW_TURN_I;
    always_ff @(posedge CLK_I) begin : WRITE_PROC
       if (!RST_NI) begin
          pending_write <= 0;
          DMEM_O <= '0;
-         write_ptr <= 1;
-         WRITE_O <= 0;
+         write_ptr <= 0;
       end
       else begin
-         WRITE_O <= 0;
          if (write_valid) begin
             if (STORE_I) begin
                pending_write <= 1;
@@ -190,7 +197,6 @@ module TraceLogger (
                if (pending_write && RW_TURN_I) begin
                   pending_write <= 0;
                   write_ptr <= (write_ptr + 1) % TRB_DEPTH;
-                  WRITE_O <= 1;
                end
             end
          end
@@ -203,7 +209,7 @@ module TraceLogger (
          pending_read <= 0;
          DATA_O <= '0;
          LOAD_GRANT_O <= 0;
-         read_ptr <= 0;
+         read_ptr <= 1;
       end
       else begin
          LOAD_GRANT_O <= 0;
