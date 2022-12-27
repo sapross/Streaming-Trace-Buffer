@@ -99,13 +99,13 @@ module TraceLogger (
    logic                                                    trg_event;
    always_ff @(posedge CLK_I) begin : SAVE_EVENT_ADDRESS
       if (!RST_NI) begin
-         trg_event = 0;
-         event_address = '0;
+         trg_event <= 0;
+         event_address <= '0;
       end
       else if (TRG_EVENT_I == 1 && trg_event == 0) begin
          // Save on which address the trigger has been registered.
-         event_address = write_ptr;
-         trg_event = 1;
+         event_address <= write_ptr;
+         trg_event <= 1;
       end
    end
 
@@ -129,17 +129,17 @@ module TraceLogger (
          // Formular for the limit L:
          // Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
          // L = n/N * P - 1
-         hist_count = (conf.trg_delay * TRB_DEPTH) / 2**(TRB_DELAY_BITS-1) -1;
-         stat.trg_event = 0;
+         hist_count <= ((conf.trg_delay+1) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS );
+         stat.trg_event <= 0;
       end
       else begin
          if (write && RW_TURN_I) begin
             if (hist_count > 0) begin
-               hist_count = hist_count - 1;
-               stat.trg_event = 0;
+               hist_count <= hist_count - 1;
+               stat.trg_event <= 0;
             end
             else begin
-               stat.trg_event = 1;
+               stat.trg_event <= 1;
             end
          end
       end // else: !if(!RST_NI || !TRB_EVENT_I)
