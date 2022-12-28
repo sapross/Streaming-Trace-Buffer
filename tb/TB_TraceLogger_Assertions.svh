@@ -58,7 +58,7 @@ always_ff @(posedge clk) begin : load_to_tracer_assert
       if (load_request) begin
          assert_pending_read <= 1;
       end
-      if (!assert_pending_read || !assert_successful_read) begin
+      if (!assert_successful_read) begin
          assert(!load_grant)
            else
              $error("%m unexpected load grant.");
@@ -75,7 +75,7 @@ always_ff @(posedge clk) begin : load_to_tracer_assert
             assert(assert_read_value == data_out)
               else
                 $error("%m incorrect data to tracer. Expected %8h, got %8h",assert_read_value, data_out);
-            assert_pending_read <=0;
+            assert_pending_read <= load_request;
             assert_successful_read <= 0;
          end
       end
@@ -96,26 +96,27 @@ always_ff @(posedge clk) begin : store_to_memory_assert
       if (store) begin
          assert_pending_write <= 1;
          assert_write_value <= data_in;
-      end
-      if (assert_pending_write) begin
-         if(rw_turn && write_allow && write_ptr != read_ptr) begin
-            assert(write)
-              else
-                $error ("%m write operation did not occur on next rw_turn.");
-            assert(assert_write_value == dword_out)
-              else
-                $error("%m incorrect data to memory. Expected %8h, got %8h",assert_write_value, dword_out);
-         end
-         else begin
-            assert(!write)
-              else
-                $error ("%m unexpected write.");
-         end
+         assert(!write)
+           else
+             $error ("%m unexpected write.");
       end
       else begin
-            assert(!write)
-              else
-                $error ("%m unexpected write.");
+         if (assert_pending_write) begin
+            if(rw_turn && write_allow && write_ptr != read_ptr && !stat.trg_event) begin
+               assert(write)
+                 else
+                   $error ("%m write operation did not occur on next rw_turn.");
+               assert(assert_write_value == dword_out)
+                 else
+                   $error("%m incorrect data to memory. Expected %8h, got %8h",assert_write_value, dword_out);
+               assert_pending_write <= 0;
+            end
+            else begin
+               assert(!write)
+                 else
+                   $error ("%m unexpected write.");
+            end
+         end
       end
    end
 end

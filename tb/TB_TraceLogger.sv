@@ -184,6 +184,7 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
       for (int mode = 0; mode < 2; mode++ ) begin
          // Control setup
          reset_to_default();
+         store <= 0;
          conf.trg_mode <= mode;
          max_num_reads <= 1;
          if(!mode) begin
@@ -251,7 +252,8 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
       test_trigger_delay_rand_rw();
       test_rand_write();
       test_rand_read();
-      $display("All tests done.")
+      $display("All tests done.");
+
       $dumpfile("TB_TRACER_DUMP.vcd");
       $dumpvars;
    end
