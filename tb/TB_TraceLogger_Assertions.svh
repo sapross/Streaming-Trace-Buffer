@@ -14,13 +14,9 @@ property outputs_after_reset_prop;
      (!reset_n) |-> ##1
        stat == STATUS_DEFAULT &&
              write == 0 &&
-             read_ptr == 1 &&
-             write_ptr == 0 &&
              dword_out == '0 &&
-             mode == 0 &&
              data_out == '0 &&
-             load_grant == 0 &&
-             num_traces == 0;
+             load_grant == 0;
 endproperty // outputs_after_reset_prop
 assert property(outputs_after_reset_prop)
   else
@@ -48,53 +44,81 @@ assert property(store_permission_invalid_prop)
   else
     $error ("%m unexpected store permission");
 
-property load_to_tracer_prop;
-   // Assert that the store is permitted under the right circumstances.
-   @(posedge clk)
-     disable iff(!reset_n ||
-                 (read_ptr+1)%TRB_DEPTH == write_ptr)
+logic assert_pending_read;
+logic assert_successful_read;
+logic [TRB_WIDTH-1:0] assert_read_value;
 
-       (load_request && read_allow) |->
-                                         ##[1:2] rw_turn == 1 |->
-                                         ##1 load_grant == 1 &&
-                                         data_out == $past(dword_in);
-endproperty // load_to_tracer_prop
-assert property(load_to_tracer_prop)
-  else
-    $error ("%m load operation did not occur on next rw_turn or is invalid.");
+always_ff @(posedge clk) begin : load_to_tracer_assert
+   if (!reset_n) begin
+      assert_pending_read <= 0;
+      assert_successful_read <= 0;
+      assert_read_value <= '0;
+   end
+   else begin
+      if (load_request) begin
+         assert_pending_read <= 1;
+      end
+      if (!assert_pending_read || !assert_successful_read) begin
+         assert(!load_grant)
+           else
+             $error("%m unexpected load grant.");
+      end
+      if (assert_pending_read) begin
+         if(rw_turn && read_allow && (read_ptr+1)%TRB_DEPTH != write_ptr) begin
+            assert_successful_read <= 1;
+            assert_read_value <= dword_in;
+         end
+         if(assert_successful_read) begin
+            assert(load_grant)
+              else
+                $error("%m expected load grant");
+            assert(assert_read_value == data_out)
+              else
+                $error("%m incorrect data to tracer. Expected %8h, got %8h",assert_read_value, data_out);
+            assert_pending_read <=0;
+            assert_successful_read <= 0;
+         end
+      end
+   end
+end
 
-property forbidden_load_to_tracer_prop;
-   // Assert that the store is permitted under the right circumstances.
-   @(posedge clk)
-     disable iff(!reset_n)
-       (!read_allow || (read_ptr+1)%TRB_DEPTH == write_ptr ) |->
-                                               !load_grant;
-endproperty // forbidden_load_to_tracer_prop
-assert property(forbidden_load_to_tracer_prop)
-  else
-    $error ("%m load operation occured while not permitted!.");
+logic assert_pending_write;
+logic assert_successful_write;
+logic [TRB_WIDTH-1:0] assert_write_value;
 
-property store_to_memory_prop;
-   // Assert that a store is followed by a write operation two cycles later
-   // if store occured while TraceLogger has RW turn.
-   @(posedge clk) disable iff(!reset_n || trg_delayed || !write_allow)
-     (store && !trg_delayed && write_allow) |->
-       ##[1:2] rw_turn == 1 |->
-                        write == 1 &&
-                        dword_out == $past(data_in);
-endproperty // store_to_memory_prop
-assert property(store_to_memory_prop)
-  else
-    $error ("%m write operation did not occur on next rw_turn or is invalid.");
-
-property forbidden_store_to_memory_prop;
-   @(posedge clk) disable iff(!reset_n )
-     (trg_delayed || !write_allow) |->
-       write == 0;
-endproperty // forbidden_store_to_memory_prop
-assert property(forbidden_store_to_memory_prop)
-  else
-    $error ("%m write operation occured while not permitted!");
+always_ff @(posedge clk) begin : store_to_memory_assert
+   if (!reset_n) begin
+      assert_pending_write <= 0;
+      assert_successful_write <= 0;
+      assert_write_value <= '0;
+   end
+   else begin
+      if (store) begin
+         assert_pending_write <= 1;
+         assert_write_value <= data_in;
+      end
+      if (assert_pending_write) begin
+         if(rw_turn && write_allow && write_ptr != read_ptr) begin
+            assert(write)
+              else
+                $error ("%m write operation did not occur on next rw_turn.");
+            assert(assert_write_value == dword_out)
+              else
+                $error("%m incorrect data to memory. Expected %8h, got %8h",assert_write_value, dword_out);
+         end
+         else begin
+            assert(!write)
+              else
+                $error ("%m unexpected write.");
+         end
+      end
+      else begin
+            assert(!write)
+              else
+                $error ("%m unexpected write.");
+      end
+   end
+end
 
 property write_pointer_increment_prop;
    // Make sure that the write pointer is always incremented after a write operation.

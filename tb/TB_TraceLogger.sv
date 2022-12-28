@@ -124,32 +124,30 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
 
    task test_trigger_delay_rand_rw;
       int rw_count;
-      logic [$clog2(TRB_DEPTH)-1:0] rptr, wptr;
 
       $display("[ %0t ] Test: Trigger Delay w. random RW.", $time);
       for (int delay = 2**TRB_DELAY_BITS -1; delay >= 0; delay--) begin
+         // Control setup
          reset_to_default();
          read_allow <= 1;
          write_allow <= 1;
          conf.trg_delay <= delay;
-
-         rw_count <= 0;
          @(posedge clk);
+         // Lift reset.
          reset_n <= 1;
          @(posedge clk);
+         // Launch trigger event.
          trg_event <= 1;
          event_pos <= $urandom_range(TRB_WIDTH - 1);
          @(posedge clk);
+         // Start random rw.
+         rw_count = 0;
          while (rw_count < TRB_WIDTH + 5) begin
             // Invert rw_turn every cycle.
             rw_turn <= ~rw_turn;
 
             if ($urandom_range(1)) begin
                rw_count++;
-
-               rptr <= read_ptr;
-               wptr <= write_ptr;
-
                // Store request from Tracer.
                data_in <= $random;
                store <= 1;
@@ -179,66 +177,81 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
 
    endtask // test_trigger_delay_rand_rw
 
-   task test_rand_write;
-      int rw_count;
-      logic [$clog2(TRB_DEPTH)-1:0] rptr, wptr;
-
-      $display("[ %0t ] Test: Trigger Delay w. random RW.", $time);
-      for (int delay = 2**TRB_DELAY_BITS -1; delay >= 0; delay--) begin
+   task test_rand_read;
+      int read_count;
+      int max_num_reads;
+      $display("[ %0t ] Test: Random read until reading is invalid.", $time);
+      for (int mode = 0; mode < 2; mode++ ) begin
+         // Control setup
          reset_to_default();
-         read_allow <= 1;
-         write_allow <= 1;
-         conf.trg_delay <= delay;
-
-         rw_count <= 0;
+         conf.trg_mode <= mode;
+         max_num_reads <= 1;
+         if(!mode) begin
+            max_num_reads <= TRB_DEPTH;
+         end
          @(posedge clk);
+         // Lift reset.
          reset_n <= 1;
-         @(posedge clk);
-         trg_event <= 1;
-         event_pos <= $urandom_range(TRB_WIDTH - 1);
-         @(posedge clk);
-         while (rw_count < TRB_WIDTH + 5) begin
-            // Invert rw_turn every cycle.
-            rw_turn <= ~rw_turn;
+         rw_turn <= 0;
 
-            if ($urandom_range(1)) begin
-               rw_count++;
-
-               rptr <= read_ptr;
-               wptr <= write_ptr;
-
-               // Store request from Tracer.
-               data_in <= $random;
-               store <= 1;
-               // Load request from Tracer.
-               load_request <= 1;
-
-               @(posedge clk);
-               if (rw_turn == 1) begin
-                  store <= 0;
-                  rw_turn <= ~rw_turn;
-                  load_request <= 0;
-                  @(posedge clk);
-               end
-               load_request <= 0;
-               store <= 0;
-
-               rw_turn <= ~rw_turn;
-               // Load answer from memory.
-               dword_in <= $random;
-
-            end // if ($urandom_range(1))
+         read_count = 0;
+         for (int read_count=0; read_count < max_num_reads;) begin
             @(posedge clk);
+            rw_turn <= ~rw_turn;
+            read_allow <= $random;
+            if(rw_turn) begin
+               dword_in <= $random;
+            end
+            if ($urandom_range(1)) begin
+               load_request = 1;
+               read_count++;
+               while(!load_grant && (read_ptr +1)%TRB_DEPTH != write_ptr ) begin
+                  @(posedge clk);
+                  read_allow <= $random;
+                  load_request = 0;
+                  rw_turn <= ~rw_turn;
+               end
+            end
+         end
+      end
+   endtask // test_rand_read
 
-         end // while (rw_count < delay)
+   task test_rand_write;
+      int write_count;
+      $display("[ %0t ] Test: Random write until writing is invalid.", $time);
 
-      end // for (int delay <= 2**TRB_DELAY_BITS -1; delay > 0; delay--)
+      // Control setup
+      reset_to_default();
+      @(posedge clk);
+      // Lift reset.
+      reset_n <= 1;
+      rw_turn <= 0;
 
+      write_count = 0;
+      for (int write_count=0; write_count < TRB_DEPTH;) begin
+         @(posedge clk);
+         store <= 0;
+         rw_turn <= ~rw_turn;
+         write_allow <= $random;
+         if (write_allow && $urandom_range(1)) begin
+            store <= 1;
+            data_in <= $random;
+            write_count++;
+            while(!write && write_ptr != read_ptr) begin
+               @(posedge clk);
+               store <= 0;
+               write_allow <= $random;
+               rw_turn <= ~rw_turn;
+            end
+         end
+      end
    endtask // test_rand_write
-
    initial begin
       #20
-        test_trigger_delay_rand_rw();
+      test_trigger_delay_rand_rw();
+      test_rand_write();
+      test_rand_read();
+      $display("All tests done.")
       $dumpfile("TB_TRACER_DUMP.vcd");
       $dumpvars;
    end

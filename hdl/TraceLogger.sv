@@ -180,24 +180,30 @@ module TraceLogger (
       end
    end
 
-   assign write = pending_write & RW_TURN_I;
+   assign write = pending_write & RW_TURN_I & write_valid;
    always_ff @(posedge CLK_I) begin : WRITE_PROC
       if (!RST_NI) begin
          pending_write <= 0;
          DMEM_O <= '0;
-         write_ptr <= 0;
+         if(!conf.trg_mode) begin
+            // In Trace Mode, the write pointer is placed behind the
+            // read pointer.
+            write_ptr <= 0;
+         end
+         else begin
+            // In Streaming Mode, the read pointer is behind.
+            write_ptr <= 1;
+         end
       end
       else begin
+         if (STORE_I) begin
+            pending_write <= 1;
+            DMEM_O <= DATA_I;
+         end
          if (write_valid) begin
-            if (STORE_I) begin
-               pending_write <= 1;
-               DMEM_O <= DATA_I;
-            end
-            else begin
-               if (pending_write && RW_TURN_I) begin
-                  pending_write <= 0;
-                  write_ptr <= (write_ptr + 1) % TRB_DEPTH;
-               end
+            if (pending_write && RW_TURN_I) begin
+               pending_write <= 0;
+               write_ptr <= (write_ptr + 1) % TRB_DEPTH;
             end
          end
       end
@@ -209,14 +215,22 @@ module TraceLogger (
          pending_read <= 0;
          DATA_O <= '0;
          LOAD_GRANT_O <= 0;
-         read_ptr <= 1;
+         if(!conf.trg_mode) begin
+            // In Trace Mode, the write pointer is placed behind the
+            // read pointer.
+            read_ptr <= 1;
+         end
+         else begin
+            // In Streaming Mode, the read pointer is behind.
+            read_ptr <= 0;
+         end
       end
       else begin
          LOAD_GRANT_O <= 0;
+         if (LOAD_REQUEST_I) begin
+            pending_read <= 1;
+         end
          if (read_valid) begin
-            if (LOAD_REQUEST_I) begin
-               pending_read <= 1;
-            end
             if (pending_read && RW_TURN_I) begin
                pending_read <= 0;
                DATA_O <= DMEM_I;
