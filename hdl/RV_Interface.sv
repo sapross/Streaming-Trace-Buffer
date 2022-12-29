@@ -67,46 +67,29 @@ module RV_INTERFACE
    end
 
    // -----------------------------------------------------------------------
-   // --- Write State Machine -----
+   // --- Write Process -----
    // -----------------------------------------------------------------------
 
-   typedef enum {st_write_idle, st_write_finish} write_state_t;
-   write_state_t wstate, wstate_next;
-
+   logic pending_write;
    assign DATA_O = WRITE_DATA_I;
-   always_ff @(posedge CLK_I) begin : WRITE_FSM_CORE
+   assign WRITE_READY_O = pending_write;
+
+   always_ff @(posedge CLK_I) begin : WRITE_PROC
       if(!RST_NI) begin
-         wstate <= st_write_idle;
+         pending_write <= 0;
+         WRITE_READY_O <= 0;
+         UPDATE_O <= 0;
       end
       else begin
-         wstate <= wstate_next;
+         UPDATE_O <= 0;
+         if (WRITE_VALID_I && WRITE_ENABLE_I) begin
+            pending_write <= 1;
+         end
+         if (pending_write) begin
+            UPDATE_O <= 1;
+            pending_write <= 0;
+         end
       end
    end
 
-   always_comb begin : WRITE_FSM
-      wstate_next = wstate;
-      if(!RST_NI) begin
-         wstate_next = st_write_idle;
-         WRITE_READY_O = 0;
-         UPDATE_O = 0;
-      end
-      else begin
-         case (wstate)
-           st_write_idle : begin
-              WRITE_READY_O = WRITE_ENABLE_I;
-              UPDATE_O = 0;
-
-              if ( WRITE_VALID_I && WRITE_ENABLE_I ) begin
-                 wstate_next = st_write_finish;
-              end
-           end
-           st_write_finish: begin
-              UPDATE_O = 1;
-              WRITE_READY_O = 0;
-
-              wstate_next = st_write_idle;
-           end
-         endcase // case (wstate)
-      end
-   end
 endmodule // RV_INTERFACE

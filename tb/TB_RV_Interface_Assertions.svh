@@ -67,7 +67,7 @@ assert property(not_read_prop)
 // Assert that a write ready by system is followed by write valid.
 property write_enable_gated_ready_prop;
       @(posedge clk) disable iff (!rst_n)
-     !write_enable |-> !write_ready;
+     !write_enable |-> ##1 !write_ready;
 endproperty // write_enable_gated_ready_prop
 assert property(write_enable_gated_ready_prop)
   else
