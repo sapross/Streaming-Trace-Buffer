@@ -48,6 +48,22 @@ assert property(read_valid_on_change_prop)
   else
     $error("%m change pulse is not followed by read valid!");
 
+property read_signal_after_success_prop;
+      @(posedge clk) disable iff (!rst_n || !read_enable)
+     read_ready && read_valid |-> ##1 read;
+endproperty // read_signal_after_success_prop
+assert property(read_signal_after_success_prop)
+  else
+    $error("%m read signal did not appear after successful read");
+
+property not_read_prop;
+      @(posedge clk) disable iff (!rst_n || !read_enable)
+     !read_ready || !read_valid |-> ##1 !read;
+endproperty // not_read_prop
+assert property(not_read_prop)
+  else
+    $error("%m unexpected read signal!");
+
 // Assert that a write ready by system is followed by write valid.
 property write_enable_gated_ready_prop;
       @(posedge clk) disable iff (!rst_n)

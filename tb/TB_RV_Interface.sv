@@ -34,6 +34,7 @@ module TB_RV_INTERFACE (/*AUTOARG*/ ) ;
 
    logic change;
    logic [READ_WIDTH-1:0] data_in;
+   logic read;
 
    initial begin
       clk = 0;
@@ -75,7 +76,9 @@ module TB_RV_INTERFACE (/*AUTOARG*/ ) ;
                     .DATA_O             (data_out),
 
                     .CHANGE_I           (change),
-                    .DATA_I             (data_in)
+                    .DATA_I             (data_in),
+
+                    .READ_O             (read)
                     );
 
    // Trigger reset and set DUT inputs to defaults.

@@ -17,23 +17,28 @@ module RV_INTERFACE
        input logic                    CLK_I,
        input logic                    RST_NI,
 
-       // Ready-Valid signals
-       input logic                    READ_ENABLE_I,
+       // --- System Signals ---
        input logic                    READ_READY_I,
        output logic                   READ_VALID_O,
        output logic [READ_WIDTH-1:0]  READ_DATA_O,
 
-       input logic                    WRITE_ENABLE_I,
        output logic                   WRITE_READY_O,
        input logic                    WRITE_VALID_I,
        input logic [WRITE_WIDTH-1:0]  WRITE_DATA_I,
 
-       // Other signals
+       // --- Device signals ---
+       input logic                    READ_ENABLE_I,
+       input logic                    WRITE_ENABLE_I,
+
+       // Indicates whether data_o has been updated.
        output logic                   UPDATE_O,
        output logic [WRITE_WIDTH-1:0] DATA_O,
 
+       // Indicates whether data_i has changed.
        input logic                    CHANGE_I,
-       input logic [READ_WIDTH-1:0]   DATA_I
+       input logic [READ_WIDTH-1:0]   DATA_I,
+       // Indicates a successful read operation.
+       output logic                   READ_O
        );
 
    // -----------------------------------------------------------------------
@@ -48,11 +53,13 @@ module RV_INTERFACE
    always_ff @(posedge CLK_I) begin : READ_PROC
       if(!RST_NI) begin
          pending_read <= 0;
+         READ_O <= 0;
       end
       else begin
-         if (READ_ENABLE_I && READ_READY_I || CHANGE_I) begin
+         READ_O <= pending_read & READ_READY_I;
+         if (CHANGE_I || READ_ENABLE_I && READ_READY_I) begin
             pending_read <= 1;
-         end;
+         end
          if (pending_read && READ_READY_I) begin
             pending_read <= 0;
          end
