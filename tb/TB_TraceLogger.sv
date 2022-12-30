@@ -26,13 +26,13 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
    logic write_allow;
    logic read_allow;
 
-   logic [$clog2(TRB_DEPTH)-1:0] read_ptr;
-   logic [TRB_WIDTH-1:0]         dword_in;
-   logic [$clog2(TRB_DEPTH)-1:0] write_ptr;
-   logic [TRB_WIDTH-1:0]         dword_out;
+   logic [TRB_ADDR_WIDTH-1:0] read_ptr;
+   logic [TRB_WIDTH-1:0]      dword_in;
+   logic [TRB_ADDR_WIDTH-1:0] write_ptr;
+   logic [TRB_WIDTH-1:0]      dword_out;
 
-   logic                         mode;
-   logic [TRB_NTRACE_BITS-1:0]   num_traces;
+   logic                      mode;
+   logic [TRB_NTRACE_BITS-1:0] num_traces;
    logic [$clog2(TRB_WIDTH)-1:0] event_pos;
    logic                         trg_event;
    logic                         trg_delayed;

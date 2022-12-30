@@ -64,7 +64,7 @@ always_ff @(posedge clk) begin : load_to_tracer_assert
              $error("%m unexpected load grant.");
       end
       if (assert_pending_read) begin
-         if(rw_turn && read_allow && (read_ptr+1)%TRB_DEPTH != write_ptr) begin
+         if(!rw_turn && read_allow && (read_ptr+1)%TRB_DEPTH != write_ptr) begin
             assert_successful_read <= 1;
             assert_read_value <= dword_in;
          end
