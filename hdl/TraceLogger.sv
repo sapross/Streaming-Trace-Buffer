@@ -13,61 +13,61 @@ import DTB_PKG::*;
 
 module TraceLogger (
                     // --- Interface Ports ---
-                    input logic                             CLK_I,
-                    input logic                             RST_NI,
+                    input logic                          CLK_I,
+                    input logic                          RST_NI,
 
-                    input logic [$bits(config_t)-1:0]       CONF_I,
-                    output logic [$bits(status_t)-1:0]      STAT_O,
+                    input logic [$bits(config_t)-1:0]    CONF_I,
+                    output logic [$bits(status_t)-1:0]   STAT_O,
 
                     // Read & Write strobe. Indicates that a write operation
                     // can be performed in the current cycle.
-                    input logic                             RW_TURN_I,
+                    input logic                          RW_TURN_I,
                     // Signal write intend to memory.
-                    output logic                            WRITE_O,
+                    output logic                         WRITE_O,
                     // Signals to indicate whether reading/writing is possible.
-                    input logic                             WRITE_ALLOW_I,
-                    input logic                             READ_ALLOW_I,
+                    input logic                          WRITE_ALLOW_I,
+                    input logic                          READ_ALLOW_I,
 
                     // Read&Write Pointers with associated data ports.
-                    output logic [$clog2(TRB_DEPTH)-1:0]    READ_PTR_O,
-                    input logic [TRB_WIDTH-1:0]             DMEM_I,
+                    output logic [$clog2(TRB_DEPTH)-1:0] READ_PTR_O,
+                    input logic [TRB_WIDTH-1:0]          DMEM_I,
 
-                    output logic [$clog2(TRB_DEPTH)-1:0]    WRITE_PTR_O,
-                    output logic [TRB_WIDTH-1:0]            DMEM_O,
+                    output logic [TRB_ADDR_WIDTH-1:0]    WRITE_PTR_O,
+                    output logic [TRB_WIDTH-1:0]         DMEM_O,
 
                     // --- To Tracer ----
                     // Signals passed into the tracer (potentially through CDC).
 
                     // Config & Status exchange
                     // Mode bit switches from trace-buffer to data-streaming mode.
-                    output logic                            MODE_O,
+                    output logic                         MODE_O,
                     // Number of traces captured in parallel.
-                    output bit [TRB_NTRACE_BITS-1:0] NTRACE_O,
+                    output bit [TRB_NTRACE_BITS-1:0]     NTRACE_O,
 
 
                     // Outgoing signals to the system interface.
                     // Position of the event in the word width of the memory.
-                    input logic [$clog2(TRB_WIDTH)-1:0]     EVENT_POS_I,
+                    input logic [$clog2(TRB_WIDTH)-1:0]  EVENT_POS_I,
                     // Indicates presence of trigger event.
-                    input logic                             TRG_EVENT_I,
+                    input logic                          TRG_EVENT_I,
                     // Signal denoting, whether event has occured and delay
                     // timer has run out.
-                    output logic                            TRG_DELAYED_O,
+                    output logic                         TRG_DELAYED_O,
 
                     // Data from memory.
-                    output logic [TRB_WIDTH-1:0]            DATA_O,
+                    output logic [TRB_WIDTH-1:0]         DATA_O,
                     // Tracer request of new data from memory.
-                    input logic                             LOAD_REQUEST_I,
+                    input logic                          LOAD_REQUEST_I,
                     // Signal to Tracer that read has been granted.
-                    output logic                            LOAD_GRANT_O,
+                    output logic                         LOAD_GRANT_O,
 
                     // Trace exchange
                     // Trace register to be stored in memory.
-                    input logic [TRB_WIDTH-1:0]             DATA_I,
+                    input logic [TRB_WIDTH-1:0]          DATA_I,
                     // Load signal triggering capture of data from Tracer.
-                    input logic                             STORE_I,
+                    input logic                          STORE_I,
                     // Signal to determine whether writing the trace is currently permissible.
-                    output logic                            STORE_PERM_O
+                    output logic                         STORE_PERM_O
                     );
 
 
@@ -89,14 +89,14 @@ module TraceLogger (
    // -----------------------------------------------------------------------------
 
    // Address on which TRG_EVENT_I flipped from 0 to 1.
-   bit [$clog2(TRB_DEPTH)-1:0]                              event_address;
+   bit [TRB_ADDR_WIDTH-1:0]                              event_address;
    assign stat.event_addr = event_address;
 
    // Memory write pointer
-   bit [$clog2(TRB_DEPTH)-1:0]                              write_ptr;
+   bit [TRB_ADDR_WIDTH-1:0]                              write_ptr;
    assign WRITE_PTR_O = write_ptr;
    // Registered (sticky) trg_event.
-   logic                                                    trg_event;
+   logic                                                 trg_event;
    always_ff @(posedge CLK_I) begin : SAVE_EVENT_ADDRESS
       if (!RST_NI) begin
          trg_event <= 0;
@@ -110,10 +110,10 @@ module TraceLogger (
    end
 
    // Counter for determining the ratio of history to pre-history.
-   bit [$clog2(TRB_DEPTH)-1:0] hist_count;
+   bit [TRB_ADDR_WIDTH-1:0] hist_count;
 
    // Write signal.
-   logic                       write;
+   logic                    write;
    assign WRITE_O = write;
 
 
@@ -151,12 +151,12 @@ module TraceLogger (
    // -----------------------------------------------------------------------------
 
    // Memory read pointer.
-   bit [$clog2(TRB_DEPTH)-1:0] read_ptr;
+   bit [TRB_ADDR_WIDTH-1:0] read_ptr;
    assign READ_PTR_O = read_ptr;
 
-   logic                       pending_write;
+   logic                    pending_write;
 
-   logic                       read_valid;
+   logic                    read_valid;
    always_comb begin
       if( READ_ALLOW_I && (read_ptr +1)%TRB_DEPTH != write_ptr) begin
          read_valid = 1;
