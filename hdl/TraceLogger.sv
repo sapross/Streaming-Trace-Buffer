@@ -157,28 +157,16 @@ module TraceLogger (
    logic                    pending_write;
 
    logic                    read_valid;
-   always_comb begin
-      if( READ_ALLOW_I && (read_ptr +1)%TRB_DEPTH != write_ptr) begin
-         read_valid = 1;
-      end
-      else begin
-         read_valid = 0;
-      end
-   end
+   assign read_valid = READ_ALLOW_I
+                       && read_ptr != write_ptr;
 
    // Writing becomes invalid if the next pointer value equals the read pointer or
    // the delayed trg_event is set.
    logic write_valid;
    assign STORE_PERM_O = write_valid;
-
-   always_comb begin
-      if (WRITE_ALLOW_I && write_ptr != read_ptr && !stat.trg_event) begin
-         write_valid = 1;
-      end
-      else begin
-         write_valid = 0;
-      end
-   end
+   assign write_valid = WRITE_ALLOW_I
+                        && (write_ptr + 1) % TRB_DEPTH != read_ptr
+                        && !stat.trg_event;
 
    assign write = pending_write & RW_TURN_I & write_valid;
    always_ff @(posedge CLK_I) begin : WRITE_PROC
@@ -191,8 +179,10 @@ module TraceLogger (
             write_ptr <= 0;
          end
          else begin
-            // In Streaming Mode, the read pointer is behind.
-            write_ptr <= 1;
+            // In Streaming Mode, the write pointer is placed in the
+            // middle of memory, one address after read ptr of memory
+            // controller.
+            write_ptr <= TRB_DEPTH/2 - 1;
          end
       end
       else begin

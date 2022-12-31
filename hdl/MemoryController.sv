@@ -21,9 +21,10 @@ module MemoryController (
                          input logic                      LOGGER_WRITE_I,
                          input logic [TRB_WIDTH-1:0]      LOGGER_DATA_I,
                          output logic [TRB_WIDTH-1:0]     LOGGER_DATA_O,
+                         input logic                      TRG_EVENT_I,
 
                          // Signals for System Interface
-                         input logic                      READ_ONLY_I,
+                         input logic                      MODE_I,
                          output logic [TRB_WIDTH-1:0]     READ_DATA_O,
                          input logic                      READ_I,
                          input logic [TRB_WIDTH-1:0]      WRITE_DATA_I,
@@ -59,33 +60,49 @@ module MemoryController (
    bit [TRB_ADDR_WIDTH-1:0]           sys_rptr, sys_wptr;
 
    logic                              read_allow;
-   logic                              write_allow;
-   assign read_allow = sys_rptr != log_wptr;
-   assign write_allow = (sys_wptr +1) % TRB_DEPTH != log_rptr;
    assign READ_ALLOW_O = read_allow;
+   assign write_allow = (sys_wptr + 1) % TRB_DEPTH != log_rptr;
+   logic                              write_allow;
    assign WRITE_ALLOW_O = write_allow;
+   assign read_allow = log_rptr != sys_wptr;
 
-   always_ff @(posedge CLK_I) begin
+   always_ff @(posedge CLK_I) begin : READ_POINTER_INC
       if (!RST_NI) begin
-         sys_rptr <= 1;
+         sys_rptr <= TRB_DEPTH/2-1;
       end
       else begin
-         if (!turn) begin
-            if (READ_I && read_allow) begin
-               sys_rptr <= (sys_rptr + 1) % TRB_DEPTH;
+         if (!MODE_I && !TRG_EVENT_I) begin
+            // In Trace-Mode, read pointer follows write pointer from Logger
+            // until trigger event is registered.
+            sys_rptr <= (log_wptr + 1 ) & TRB_DEPTH;
+         end
+         else begin
+            // In either streaming mode or trace mode with trigger event,
+            // increment sys_rptr on read from system interface.
+            if (!turn) begin
+               if (READ_I) begin
+                  if (read_allow && sys_rptr != sys_wptr) begin
+                     sys_rptr <= (sys_rptr + 1) % TRB_DEPTH;
+                  end
+               end
             end
          end
       end
    end
 
-   always_ff @(posedge CLK_I) begin
+   always_ff @(posedge CLK_I) begin : WRITE_POINTER_INC
       if (!RST_NI) begin
          sys_wptr <= 0;
       end
       else begin
-         if (!turn) begin
-            if (WRITE_I && write_allow) begin
-               sys_wptr <= (sys_wptr + 1) % TRB_DEPTH;
+         if (MODE_I) begin
+            // Writing is disabled when in Trace-Mode.
+            if (!turn) begin
+               if (WRITE_I) begin
+                  if (write_allow && (sys_wptr + 1) % TRB_DEPTH != sys_rptr) begin
+                     sys_wptr <= (sys_wptr + 1) % TRB_DEPTH;
+                  end
+               end
             end
          end
       end
@@ -107,7 +124,7 @@ module MemoryController (
       end
       // Prevent system interface to write to memory
       // if read only is set.
-      if (!turn && !READ_ONLY_I) begin
+      if (!turn && !MODE_I) begin
          write_addr = sys_wptr;
          write_data = WRITE_DATA_I;
       end

@@ -10,36 +10,36 @@
 
 
 
-property outputs_after_reset_prop;
-   @(posedge CLK_I)
-     (!RST_NI) |-> ##[0:1]
-       !turn && write_allow && read_allow;
-endproperty // outputs_after_reset_prop
-assert property(outputs_after_reset_prop)
-  else
-    $error("%m Output signals did not reset to correct values");
+// property outputs_after_reset_prop;
+//    @(posedge CLK_I)
+//      (!RST_NI) |-> ##[0:1]
+//        !turn && write_allow && read_allow;
+// endproperty // outputs_after_reset_prop
+// assert property(outputs_after_reset_prop)
+//   else
+//     $error("%m Output signals did not reset to correct values");
 
 property read_allow_prop;
    @(posedge CLK_I) disable iff(!RST_NI)
-     sys_rptr != log_wptr |-> read_allow;
+     log_rptr != sys_wptr |-> read_allow;
 endproperty // read_allow_prop
 assert property(read_allow_prop);
 
 property read_disallow_prop;
    @(posedge CLK_I) disable iff(!RST_NI)
-     sys_rptr == log_wptr |-> !read_allow;
+     log_rptr == sys_wptr |-> !read_allow;
 endproperty // read_allow_prop
 assert property(read_disallow_prop);
 
 property write_allow_prop;
-   @(posedge CLK_I) disable iff(!RST_NI)
-     (sys_wptr+1) % TRB_DEPTH!= log_rptr |-> write_allow;
+   @(posedge CLK_I) disable iff(!RST_NI || MODE_I)
+     (sys_wptr + 1) % TRB_DEPTH != log_rptr |-> write_allow;
 endproperty // write_allow_prop
 assert property(write_allow_prop);
 
 property write_disallow_prop;
-   @(posedge CLK_I) disable iff(!RST_NI)
-     (sys_wptr+1) % TRB_DEPTH == log_rptr |-> !write_allow;
+   @(posedge CLK_I) disable iff(!RST_NI || MODE_I)
+     (sys_wptr + 1) % TRB_DEPTH == log_rptr |-> !write_allow;
 endproperty // write_disallow_prop
 assert property(write_disallow_prop);
 
@@ -47,7 +47,7 @@ property system_turn_prop;
    @(posedge CLK_I) disable iff(!RST_NI)
      (!turn)
      |-> read_addr == sys_rptr && write_addr == sys_wptr && write_data == WRITE_DATA_I
-                    |-> ##1 READ_DATA_O == read_data;
+                    |-> ##1 READ_DATA_O == $past(read_data);
 endproperty // system_turn_prop
 assert property(system_turn_prop);
 
@@ -55,6 +55,6 @@ property logger_turn_prop;
    @(posedge CLK_I) disable iff(!RST_NI)
      (turn)
      |-> read_addr == log_rptr && write_addr == log_wptr && write_data == LOGGER_DATA_I
-                    |-> ##1 LOGGER_DATA_O == read_data;
+                    |-> ##1 LOGGER_DATA_O == $past(read_data);
 endproperty // logger_turn_prop
 assert property(logger_turn_prop);

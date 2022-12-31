@@ -25,8 +25,9 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
    logic                      logger_write;
    logic [TRB_WIDTH-1:0]      logger_data_in;
    logic [TRB_WIDTH-1:0]      logger_data_out;
+   logic                      trg_event;
 
-   logic                      read_only;
+   logic                      mode;
    logic [TRB_WIDTH-1:0]      read_data;
    logic                      read;
    logic [TRB_WIDTH-1:0]      write_data;
@@ -46,7 +47,8 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
    initial begin
       rst_n = 0;
 
-      read_only = 0;
+      trg_event = 0;
+      mode = 0;
       read_ptr = '0;
       write_ptr = '0;
       logger_write = 0;
@@ -67,7 +69,8 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
                          .LOGGER_WRITE_I     (logger_write),
                          .LOGGER_DATA_I      (logger_data_in),
                          .LOGGER_DATA_O      (logger_data_out),
-                         .READ_ONLY_I        (read_only),
+                         .TRG_EVENT_I        (trg_event),
+                         .MODE_I             (mode),
                          .READ_DATA_O        (read_data),
                          .READ_I             (read),
                          .WRITE_DATA_I       (write_data),
@@ -80,7 +83,8 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
    task reset_to_default;
       rst_n = 0;
 
-      read_only = 0;
+      trg_event = 0;
+      mode = 0;
       read_ptr = '0;
       write_ptr = '0;
       logger_write = 0;
@@ -91,41 +95,49 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
       write = 0;
    endtask // reset_to_default
 
-   task test_random_rw;
+   task test_stream_mode_random_rw;
 
-      $display("[ %0t ] Test: Random Read & Write.", $time);
+      $display("[ %0t ] Test: Stream-Mode Random Read & Write.", $time);
       reset_to_default();
       @(posedge clk);
       rst_n <= 1;
-      read_ptr = 1;
-      write_ptr = 0;
+      mode <= 1;
+      read_ptr = 0;
+      write_ptr = TRB_DEPTH/2;
       @(posedge clk);
       for (int i = 0; i < 100;) begin
          // Logger Sim
          logger_write <= 0;
-         if ((read_ptr +1) % TRB_WIDTH  != write_ptr && read_allow && rw_turn) begin
-            read_ptr = (read_ptr + $urandom_range(1)) % TRB_WIDTH;
-         end
-         if (write_ptr != read_ptr && write_allow && rw_turn) begin
-            if ($urandom_range(1)) begin
-               write_ptr = (write_ptr + 1) % TRB_WIDTH;
-               logger_write <= 1;
-               logger_data_in <= $random;
+         if (!rw_turn) begin
+            if ((read_ptr != write_ptr) && read_allow) begin
+               read_ptr <= (read_ptr + $urandom_range(1)) % TRB_WIDTH;
+            end
+            if ((write_ptr + 1) % TRB_DEPTH != read_ptr && write_allow) begin
+               if ($urandom_range(1)) begin
+                  write_ptr <= (write_ptr + 1) % TRB_WIDTH;
+                  logger_write <= 1;
+                  logger_data_in <= $random;
+               end
             end
          end
 
          // System Interface sim.
          write <= 0;
          read <= 0;
-         if(read_allow && !rw_turn) begin
-            read = $random;
-         end
-         if(write_allow && !rw_turn) begin
-            if ($urandom_range(1)) begin
-               write_data <= $random;
-               write <= 1;
+         if (rw_turn) begin
+            if(read_allow) begin
+               if ($urandom_range(1)) begin
+                  read <= 1;
+               end
+            end
+            if(write_allow) begin
+               if ($urandom_range(1)) begin
+                  write_data <= $random;
+                  write <= 1;
+               end
             end
          end
+
          @(posedge clk);
 
       end
@@ -133,7 +145,7 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
 
    initial begin
       #20
-        test_random_rw();
+        test_stream_mode_random_rw();
       $display("[ %0t ] All tests done.", $time);
 
       $dumpfile("TB_MEMORYCONTROLLER_DUMP.vcd");
