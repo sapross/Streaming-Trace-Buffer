@@ -27,7 +27,7 @@ property store_permission_valid_prop;
    // Assert that the store is permitted under the right circumstances.
    @(posedge clk) disable iff(!reset_n)
      (write_allow &&
-      write_ptr != read_ptr &&
+      (write_ptr + 1) % TRB_DEPTH != read_ptr &&
       !trg_delayed) |-> store_perm == 1;
 endproperty // store_permission_valid_prop
 assert property(store_permission_valid_prop)
@@ -37,7 +37,7 @@ assert property(store_permission_valid_prop)
 property store_permission_invalid_prop;
    @(posedge clk) disable iff(!reset_n)
      (!write_allow ||
-      write_ptr == read_ptr ||
+      (write_ptr + 1) % TRB_DEPTH == read_ptr ||
       trg_delayed) |-> !store_perm;
 endproperty // store_permission_invalid_prop
 assert property(store_permission_invalid_prop)

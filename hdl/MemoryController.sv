@@ -16,8 +16,10 @@ module MemoryController (
 
                          // Signals for TraceLogger
                          output logic                     RW_TURN_O,
-                         input logic [TRB_ADDR_WIDTH-1:0] READ_PTR_I,
-                         input logic [TRB_ADDR_WIDTH-1:0] WRITE_PTR_I,
+                         output logic                     LOGGER_WRITE_ALLOW_O,
+                         output logic                     LOGGER_READ_ALLOW_O,
+                         input logic [TRB_ADDR_WIDTH-1:0] LOGGER_READ_PTR_I,
+                         input logic [TRB_ADDR_WIDTH-1:0] LOGGER_WRITE_PTR_I,
                          input logic                      LOGGER_WRITE_I,
                          input logic [TRB_WIDTH-1:0]      LOGGER_DATA_I,
                          output logic [TRB_WIDTH-1:0]     LOGGER_DATA_O,
@@ -25,14 +27,12 @@ module MemoryController (
 
                          // Signals for System Interface
                          input logic                      MODE_I,
+                         output logic                     WRITE_ALLOW_O,
+                         output logic                     READ_ALLOW_O,
                          output logic [TRB_WIDTH-1:0]     READ_DATA_O,
                          input logic                      READ_I,
                          input logic [TRB_WIDTH-1:0]      WRITE_DATA_I,
-                         input logic                      WRITE_I,
-
-                         // Signals for both
-                         output logic                     WRITE_ALLOW_O,
-                         output logic                     READ_ALLOW_O
+                         input logic                      WRITE_I
                          );
 
 
@@ -53,18 +53,34 @@ module MemoryController (
    // ---------------------------------------------------------------------------------------
    // ---- Read & write pointer management ----
    // ---------------------------------------------------------------------------------------
+
+   function logic less(input int unsigned a, input int unsigned b);
+      return (a+1)%TRB_DEPTH != b;
+   endfunction // less
+
    bit [TRB_ADDR_WIDTH-1:0]           log_rptr, log_wptr;
-   assign log_rptr = READ_PTR_I;
-   assign log_wptr = WRITE_PTR_I;
+   assign log_rptr = LOGGER_READ_PTR_I;
+   assign log_wptr = LOGGER_WRITE_PTR_I;
 
    bit [TRB_ADDR_WIDTH-1:0]           sys_rptr, sys_wptr;
 
-   logic                              read_allow;
-   assign READ_ALLOW_O = read_allow;
-   assign write_allow = (sys_wptr + 1) % TRB_DEPTH != log_rptr;
-   logic                              write_allow;
-   assign WRITE_ALLOW_O = write_allow;
-   assign read_allow = log_rptr != sys_wptr;
+   logic                              log_read_allow;
+   assign LOGGER_READ_ALLOW_O = log_read_allow;
+   logic                              log_write_allow;
+   assign LOGGER_WRITE_ALLOW_O = log_write_allow;
+   logic                              sys_read_allow;
+   assign READ_ALLOW_O = sys_read_allow;
+   logic                              sys_write_allow;
+   assign WRITE_ALLOW_O = sys_write_allow;
+
+
+   assign log_read_allow = log_rptr != sys_wptr;
+   assign log_write_allow = less(log_wptr, log_rptr);
+
+   assign sys_read_allow = sys_rptr != log_wptr;
+   assign sys_write_allow = less(sys_wptr, sys_rptr);
+
+
 
    always_ff @(posedge CLK_I) begin : READ_POINTER_INC
       if (!RST_NI) begin
@@ -81,7 +97,7 @@ module MemoryController (
             // increment sys_rptr on read from system interface.
             if (!turn) begin
                if (READ_I) begin
-                  if (read_allow && sys_rptr != sys_wptr) begin
+                  if (sys_read_allow && sys_rptr != sys_wptr) begin
                      sys_rptr <= (sys_rptr + 1) % TRB_DEPTH;
                   end
                end
@@ -99,7 +115,7 @@ module MemoryController (
             // Writing is disabled when in Trace-Mode.
             if (!turn) begin
                if (WRITE_I) begin
-                  if (write_allow && (sys_wptr + 1) % TRB_DEPTH != sys_rptr) begin
+                  if (sys_write_allow && (sys_wptr + 1) % TRB_DEPTH != sys_rptr) begin
                      sys_wptr <= (sys_wptr + 1) % TRB_DEPTH;
                   end
                end

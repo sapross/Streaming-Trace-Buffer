@@ -20,6 +20,8 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
    logic rst_n;
 
    logic rw_turn;
+   logic                      log_write_allow;
+   logic                      log_read_allow;
    logic [TRB_ADDR_WIDTH-1:0] read_ptr;
    logic [TRB_ADDR_WIDTH-1:0] write_ptr;
    logic                      logger_write;
@@ -61,22 +63,24 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
    end
 
    MemoryController DUT (
-                         .CLK_I              (clk),
-                         .RST_NI             (rst_n),
-                         .RW_TURN_O          (rw_turn),
-                         .READ_PTR_I         (read_ptr),
-                         .WRITE_PTR_I        (write_ptr),
-                         .LOGGER_WRITE_I     (logger_write),
-                         .LOGGER_DATA_I      (logger_data_in),
-                         .LOGGER_DATA_O      (logger_data_out),
-                         .TRG_EVENT_I        (trg_event),
-                         .MODE_I             (mode),
-                         .READ_DATA_O        (read_data),
-                         .READ_I             (read),
-                         .WRITE_DATA_I       (write_data),
-                         .WRITE_I            (write),
-                         .WRITE_ALLOW_O      (write_allow),
-                         .READ_ALLOW_O       (read_allow)
+                         .CLK_I                 (clk),
+                         .RST_NI                (rst_n),
+                         .RW_TURN_O             (rw_turn),
+                         .LOGGER_WRITE_ALLOW_O  (log_write_allow),
+                         .LOGGER_READ_ALLOW_O   (log_read_allow),
+                         .LOGGER_READ_PTR_I     (read_ptr),
+                         .LOGGER_WRITE_PTR_I    (write_ptr),
+                         .LOGGER_WRITE_I        (logger_write),
+                         .LOGGER_DATA_I         (logger_data_in),
+                         .LOGGER_DATA_O         (logger_data_out),
+                         .TRG_EVENT_I           (trg_event),
+                         .MODE_I                (mode),
+                         .READ_DATA_O           (read_data),
+                         .READ_I                (read),
+                         .WRITE_DATA_I          (write_data),
+                         .WRITE_I               (write),
+                         .WRITE_ALLOW_O         (write_allow),
+                         .READ_ALLOW_O          (read_allow)
                          );
 
    // Trigger reset and set DUT inputs to defaults.
@@ -109,10 +113,10 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
          // Logger Sim
          logger_write <= 0;
          if (!rw_turn) begin
-            if ((read_ptr != write_ptr) && read_allow) begin
+            if ((read_ptr != write_ptr) && log_read_allow) begin
                read_ptr <= (read_ptr + $urandom_range(1)) % TRB_WIDTH;
             end
-            if ((write_ptr + 1) % TRB_DEPTH != read_ptr && write_allow) begin
+            if ((write_ptr + 1) % TRB_DEPTH != read_ptr && log_write_allow) begin
                if ($urandom_range(1)) begin
                   write_ptr <= (write_ptr + 1) % TRB_WIDTH;
                   logger_write <= 1;
