@@ -107,7 +107,7 @@ module TB_MEMORYCONTROLLER (/*AUTOARG*/ ) ;
       rst_n <= 1;
       mode <= 1;
       read_ptr = 0;
-      write_ptr = TRB_DEPTH/2;
+      write_ptr = TRB_DEPTH/2-1;
       @(posedge clk);
       for (int i = 0; i < 100;) begin
          // Logger Sim

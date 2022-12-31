@@ -54,9 +54,9 @@ module MemoryController (
    // ---- Read & write pointer management ----
    // ---------------------------------------------------------------------------------------
 
-   function logic less(input int unsigned a, input int unsigned b);
+   function logic next_below(input int unsigned a, input int unsigned b);
       return (a+1)%TRB_DEPTH != b;
-   endfunction // less
+   endfunction // next_below
 
    bit [TRB_ADDR_WIDTH-1:0]           log_rptr, log_wptr;
    assign log_rptr = LOGGER_READ_PTR_I;
@@ -75,10 +75,10 @@ module MemoryController (
 
 
    assign log_read_allow = log_rptr != sys_wptr;
-   assign log_write_allow = less(log_wptr, log_rptr);
+   assign log_write_allow = next_below(log_wptr, log_rptr);
 
    assign sys_read_allow = sys_rptr != log_wptr;
-   assign sys_write_allow = less(sys_wptr, sys_rptr);
+   assign sys_write_allow = next_below(sys_wptr, sys_rptr);
 
 
 
