@@ -170,40 +170,41 @@ module Tracer (
 
    assign FPGA_STREAM_O = stream[stream_pos +: TRB_MAX_TRACES];
 
-   // Stream register loading from memory.
-   // Load pulse generation.
-   logic       req;
-   logic       req_prev;
-   always_ff @(posedge FPGA_CLK_I) begin : REQUEST_PULSE_GEN
-      if (RST_I) begin
-         req_prev = 0;
-      end
-      else begin
-         req_prev = req;
-      end
-   end
-   assign  LOAD_REQUEST_O  = ~req_prev & req;
+   // // Stream register loading from memory.
+   // // Load pulse generation.
+   // logic       req;
+   // logic       req_prev;
+   // always_ff @(posedge FPGA_CLK_I) begin : REQUEST_PULSE_GEN
+   //    if (RST_I) begin
+   //       req_prev = 0;
+   //    end
+   //    else begin
+   //       req_prev = req;
+   //    end
+   // end
 
-   // Register signifying whether new_data is present at the
-   // (registered) DATA_I port.
+   // // Register signifying whether new_data is present at the
+   // // (registered) DATA_I port.
+   // always_comb  begin : REQUEST_LOGIC
+   //    // No request is issued by default.
+   //    req = 0;
+   //    if (start) begin
+   //       if (!MODE_I) begin
+   //          // Start requesting new data at stream position zero.
+   //          if (stream_pos == 0) begin
+   //             req = 1;
+   //          end
+   //       end
+   //       else begin
+   //          // In streaming mode issue a request the moment no new data
+   //          // is available.
+   //          req = ~new_data;
+   //       end
+   //    end
+   // end
+
    logic new_data;
-   always_comb  begin : REQUEST_LOGIC
-      // No request is issued by default.
-      req = 0;
-      if (start) begin
-         if (!MODE_I) begin
-            // Start requesting new data at stream position zero.
-            if (stream_pos == 0) begin
-               req = 1;
-            end
-         end
-         else begin
-            // In streaming mode issue a request the moment no new data
-            // is available.
-            req = ~new_data;
-         end
-      end
-   end
+   assign  LOAD_REQUEST_O  = start & ~new_data;
 
    always_ff @(posedge FPGA_CLK_I) begin : STREAM_PROCESS
       if (RST_I) begin
