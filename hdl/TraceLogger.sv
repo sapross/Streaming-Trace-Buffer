@@ -1,6 +1,6 @@
 //                              -*- Mode: SystemVerilog -*-
-// Filename        : Trace2Mem.sv
-// Description     : Module handling saving the trace to memory.
+// Filename        : TraceLogger.sv
+// Description     : Module combining Tracer and Logger into one functional unit.
 // Author          : Stephan Proß
 // Created On      : Thu Dec  1 13:37:07 2022
 // Last Modified By: Stephan Proß
@@ -13,222 +13,175 @@ import DTB_PKG::*;
 
 module TraceLogger (
                     // --- Interface Ports ---
-                    input logic                         CLK_I,
-                    input logic                         RST_NI,
+                    input logic                        CLK_I,
+                    input logic                        RST_NI,
 
-                    input logic [$bits(config_t)-1:0]   CONF_I,
-                    output logic [$bits(status_t)-1:0]  STAT_O,
+                    input logic [$bits(config_t)-1:0]  CONF_I,
+                    input logic                        CONF_UPDATE_I,
+                    output logic [$bits(status_t)-1:0] STAT_O,
 
                     // Read & Write strobe. Indicates that a write operation
                     // can be performed in the current cycle.
-                    input logic                         RW_TURN_I,
+                    input logic                        RW_TURN_I,
                     // Signal write intend to memory.
-                    output logic                        WRITE_O,
+                    output logic                       WRITE_O,
                     // Signals to indicate whether reading/writing is possible.
-                    input logic                         WRITE_ALLOW_I,
-                    input logic                         READ_ALLOW_I,
+                    input logic                        WRITE_ALLOW_I,
+                    input logic                        READ_ALLOW_I,
 
                     // Read&Write Pointers with associated data ports.
-                    output logic [TRB_ADDR_WIDTH-1:0]   READ_PTR_O,
-                    input logic [TRB_WIDTH-1:0]         DMEM_I,
+                    output logic [TRB_ADDR_WIDTH-1:0]  READ_PTR_O,
+                    input logic [TRB_WIDTH-1:0]        DMEM_I,
 
-                    output logic [TRB_ADDR_WIDTH-1:0]   WRITE_PTR_O,
-                    output logic [TRB_WIDTH-1:0]        DMEM_O,
+                    output logic [TRB_ADDR_WIDTH-1:0]  WRITE_PTR_O,
+                    output logic [TRB_WIDTH-1:0]       DMEM_O,
 
-                    // --- To Tracer ----
-                    // Signals passed into the tracer (potentially through CDC).
+                    // ---- FPGA signals ----
+                    // Signals of the FPGA facing side.
+                    input logic                        FPGA_CLK_I,
+                    // Trigger signal.
+                    input logic                        FPGA_TRIG_I,
+                    // Trace input
+                    input logic [TRB_MAX_TRACES-1:0]   FPGA_TRACE_I,
+                    // Write valid. Only relevant during streaming mode.
+                    output logic                       FPGA_WRITE_VALID_O,
 
-                    // Config & Status exchange
-                    // Mode bit switches from trace-buffer to data-streaming mode.
-                    output logic                        MODE_O,
-                    // Number of traces captured in parallel.
-                    output bit [TRB_NTRACE_BITS-1:0]    NTRACE_O,
+                    // Read signal for streaming mode, irrelevant during trace mode.
+                    input logic                        FPGA_READ_I,
+                    // Stream output.
+                    output logic [TRB_MAX_TRACES-1:0]  FPGA_STREAM_O,
+                    // Set to high after trigger event with delay. Usable for daisy-chaining.
+                    // Indicates whether data is valid in streaming mode.
+                    output logic                       FPGA_TRIG_O
 
-
-                    // Outgoing signals to the system interface.
-                    // Position of the event in the word width of the memory.
-                    input logic [$clog2(TRB_WIDTH)-1:0] EVENT_POS_I,
-                    // Indicates presence of trigger event.
-                    input logic                         TRG_EVENT_I,
-                    // Signal denoting, whether event has occured and delay
-                    // timer has run out.
-                    output logic                        TRG_DELAYED_O,
-
-                    // Data from memory.
-                    output logic [TRB_WIDTH-1:0]        DATA_O,
-                    // Tracer request of new data from memory.
-                    input logic                         LOAD_REQUEST_I,
-                    // Signal to Tracer that read has been granted.
-                    output logic                        LOAD_GRANT_O,
-
-                    // Trace exchange
-                    // Trace register to be stored in memory.
-                    input logic [TRB_WIDTH-1:0]         DATA_I,
-                    // Load signal triggering capture of data from Tracer.
-                    input logic                         STORE_I,
-                    // Signal to determine whether writing the trace is currently permissible.
-                    output logic                        STORE_PERM_O
                     );
 
 
-   // Forwarding of relevant config fields to Tracer
-   config_t conf;
-   assign conf = CONF_I;
+   // Other signals.
+   logic                                               log_store_perm;
+   logic                                               trc_store_perm;
+   always_ff @(posedge FPGA_CLK_I) begin
+      trc_store_perm <= log_store_perm;
+   end
 
-   assign MODE_O = conf.trg_mode;
-   assign NTRACE_O = conf.trg_num_traces;
+   logic                                               log_load_request;
+   logic                                               trc_load_request;
+   always_ff @(posedge CLK_I) begin
+      log_load_request <= trc_load_request;
+   end
 
-   // Forwarding of status to Interface.
-   status_t stat;
-   assign STAT_O = stat;
-   assign stat.event_pos = EVENT_POS_I;
-   assign TRG_DELAYED_O = stat.trg_event;
 
-   // -----------------------------------------------------------------------------
-   // --- (Pre-)Trigger Event Handling ---
-   // -----------------------------------------------------------------------------
-
-   // Address on which TRG_EVENT_I flipped from 0 to 1.
-   bit [TRB_ADDR_WIDTH-1:0]                              event_address;
-   assign stat.event_addr = event_address;
-
-   // Memory write pointer
-   bit [TRB_ADDR_WIDTH-1:0]                              write_ptr;
-   assign WRITE_PTR_O = write_ptr;
-   // Registered (sticky) trg_event.
-   logic                                                 trg_event;
-   always_ff @(posedge CLK_I) begin : SAVE_EVENT_ADDRESS
-      if (!RST_NI) begin
-         trg_event <= 0;
-         event_address <= '0;
-      end
-      else if (TRG_EVENT_I == 1 && trg_event == 0) begin
-         // Save on which address the trigger has been registered.
-         event_address <= write_ptr;
-         trg_event <= 1;
+   //  --- Control Signal Group ---
+   //  -- Data signals
+   // Logger
+   logic                                               log_mode;
+   bit [TRB_NTRACE_BITS-1:0]                           log_num_traces;
+   // Tracer
+   logic                                               trc_mode;
+   bit [TRB_NTRACE_BITS-1:0]                           trc_num_traces;
+   //  -- Synchronizing signal
+   logic                                               conf_update;
+   // -----------------------------
+   always_ff @(posedge FPGA_CLK_I) begin : REGISTER_CONTROL
+      if(conf_update) begin
+         trc_mode <= log_mode;
+         trc_num_traces <= log_num_traces;
       end
    end
 
-   // Counter for determining the ratio of history to pre-history.
-   bit [TRB_ADDR_WIDTH-1:0] hist_count;
 
-   // Write signal.
-   logic                    write;
-   assign WRITE_O = write;
-
-
-
-   always_ff @(posedge CLK_I) begin : PRE_TRIGGER_PROC
-      // Only start counting down the moment a trigger event has been registered.
-      if(!RST_NI || !trg_event) begin
-         // The config trg_delay controls the ratio values before and after the
-         // trigger event i.e.:
-         // trg_delay = 111 : (Almost) all trace data is from directly after the trigger event.
-         // trg_delay = 100 : Half the trace data if before and after the event (centered).
-         // trg_delay = 000 : Entire trace contains data leading up to trace event.
-         // Formular for the limit L:
-         // Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
-         // L = n/N * P - 1
-         hist_count <= ((conf.trg_delay+1) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS );
-         stat.trg_event <= 0;
-      end
-      else begin
-         if (write && RW_TURN_I) begin
-            if (hist_count > 0) begin
-               hist_count <= hist_count - 1;
-               stat.trg_event <= 0;
-            end
-            else begin
-               stat.trg_event <= 1;
-            end
-         end
-      end // else: !if(!RST_NI || !TRB_EVENT_I)
-   end // always_ff @ (posedge CLK_I)
-
-
-   // -----------------------------------------------------------------------------
-   // --- RW to memory ---
-   // -----------------------------------------------------------------------------
-
-   // Memory read pointer.
-   bit [TRB_ADDR_WIDTH-1:0] read_ptr;
-   assign READ_PTR_O = read_ptr;
-
-   logic                    pending_write;
-
-   logic                    read_valid;
-   assign read_valid = READ_ALLOW_I
-                       && read_ptr != write_ptr;
-
-   // Writing becomes invalid if the next pointer value equals the read pointer or
-   // the delayed trg_event is set.
-   logic write_valid;
-   assign STORE_PERM_O = write_valid;
-   assign write_valid = WRITE_ALLOW_I
-                        && (write_ptr + 1) % TRB_DEPTH != read_ptr
-                        && !stat.trg_event;
-
-   assign write = pending_write & RW_TURN_I & write_valid;
-   always_ff @(posedge CLK_I) begin : WRITE_PROC
-      if (!RST_NI) begin
-         pending_write <= 0;
-         DMEM_O <= '0;
-         if(!conf.trg_mode) begin
-            // In Trace Mode, the write pointer is placed behind the
-            // read pointer.
-            write_ptr <= 0;
-         end
-         else begin
-            // In Streaming Mode, the write pointer is placed in the
-            // middle of memory, one address after read ptr of memory
-            // controller.
-            write_ptr <= TRB_DEPTH/2 - 1;
-         end
-      end
-      else begin
-         if (STORE_I) begin
-            pending_write <= 1;
-            DMEM_O <= DATA_I;
-         end
-         if (write_valid) begin
-            if (pending_write && RW_TURN_I) begin
-               pending_write <= 0;
-               write_ptr <= (write_ptr + 1) % TRB_DEPTH;
-            end
-         end
+   //  --- Trace & Status Signal Group ---
+   //  -- Data signals
+   // Logger
+   logic [$clog(TRB_WIDTH)-1:0]                        log_event_pos;
+   logic                                               log_trg_event;
+   logic [TRB_WIDTH-1:0]                               log_data_in;
+   // Tracer
+   logic [$clog(TRB_WIDTH)-1:0]                        trc_event_pos;
+   logic                                               trc_trg_event;
+   logic [TRB_WIDTH-1:0]                               trc_data_out;
+   //  -- Synchronizing signal
+   logic                                               store;
+   // -----------------------------
+   always_ff @(posedge CLK_I) begin : REGISTER_TRACE_STATUS
+      if(store) begin
+         log_event_pos <= trc_event_pos;
+         log_trg_event <= trc_trg_event;
+         log_data_in <= trc_data_out;
       end
    end
 
-   logic pending_read;
-   always_ff @(posedge CLK_I) begin : READ_PROC
-      if (!RST_NI) begin
-         pending_read <= 0;
-         DATA_O <= '0;
-         LOAD_GRANT_O <= 0;
-         if(!conf.trg_mode) begin
-            // In Trace Mode, the write pointer is placed behind the
-            // read pointer.
-            read_ptr <= 1;
-         end
-         else begin
-            // In Streaming Mode, the read pointer is behind.
-            read_ptr <= 0;
-         end
-      end
-      else begin
-         LOAD_GRANT_O <= 0;
-         if (LOAD_REQUEST_I) begin
-            pending_read <= 1;
-         end
-         if (read_valid) begin
-            if (pending_read && !RW_TURN_I) begin
-               pending_read <= 0;
-               DATA_O <= DMEM_I;
-               LOAD_GRANT_O <= 1;
-               read_ptr <= (read_ptr + 1) % TRB_DEPTH;
-            end
-         end
+   // --- Stream Signal Group ---
+   //  -- Data signals
+   // Logger
+   logic                                               log_trg_delayed;
+   logic [TRB_WIDTH-1:0]                               log_data_out;
+   // Tracer
+   logic                                               trc_trg_delayed;
+   logic [TRB_WIDTH-1:0]                               trc_data_in;
+   //  -- Synchronizing signal
+   logic                                               load_grant;
+   // -----------------------------
+   always_ff @(posedge FPGA_CLK_I) begin : REGISTER_STREAM
+      if(load_grant) begin
+         trc_trg_delayed <= log_trg_delayed;
+         trc_data_in <= log_data_out;
       end
    end
+
+
+   Logger log_1
+     (
+      .CLK_I           (CLK_I),
+      .RST_NI          (RST_NI),
+      .CONF_I          (CONF_I),
+      .STAT_O          (STAT_O),
+      .RW_TURN_I       (RW_TURN_I),
+      .WRITE_O         (WRITE_O),
+      .WRITE_ALLOW_I   (WRITE_ALLOW_I),
+      .READ_ALLOW_I    (READ_ALLOW_I),
+      .READ_PTR_O      (READ_PTR_O),
+      .DMEM_I          (DMEM_I),
+      .WRITE_PTR_O     (WRITE_PTR_O),
+      .DMEM_O          (DMEM_O),
+
+      .MODE_O          (log_mode),
+      .NTRACE_O        (log_num_traces),
+      .EVENT_POS_I     (log_event_pos),
+      .TRG_EVENT_I     (log_trg_event),
+      .TRG_DELAYED_O   (log_trg_delayed),
+      .DATA_O          (log_data_out),
+      .LOAD_REQUEST_I  (load_request),
+      .LOAD_GRANT_O    (load_grant),
+      .DATA_I          (log_data_in),
+      .STORE_I         (store),
+      .STORE_PERM_O    (store_perm)
+      );
+
+   Tracer trc_1
+     (
+      .RST_I                (CONF_UPDATE_I),
+      .MODE_I               (trc_mode),
+      .NTRACE_I             (trc_num_traces),
+      .EVENT_POS_O          (trc_event_pos),
+      .TRG_EVENT_O          (trc_trg_event),
+      .TRG_DELAYED_I        (trc_trg_delayed),
+
+      .DATA_I               (trc_data_in),
+      .LOAD_REQUEST_O       (load_request),
+      .LOAD_GRANT_I         (load_grant),
+
+      .DATA_O               (trc_data_out),
+      .STORE_O              (store),
+      .STORE_PERM_I         (store_perm),
+
+      .FPGA_CLK_I           (FPGA_CLK_I),
+      .FPGA_TRIG_I          (FPGA_TRIG_I),
+      .FPGA_TRACE_I         (FPGA_TRACE_I),
+      .FPGA_WRITE_VALID_O   (FPGA_WRITE_VALID_O),
+      .FPGA_READ_I          (FPGA_READ_I),
+      .FPGA_STREAM_O        (FPGA_STREAM_O),
+      .FPGA_TRIG_O          (FPGA_TRIG_O)
+      );
 
 endmodule // TraceLogger
