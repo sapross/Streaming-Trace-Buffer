@@ -13,7 +13,7 @@ import DTB_PKG::*;
 // --------------------------------------------------------------------
 // Testbench Module
 // --------------------------------------------------------------------
-module TB_TRACELOGGER (/*AUTOARG*/ ) ;
+module TB_LOGGER (/*AUTOARG*/ ) ;
 
    logic clk;
    logic reset_n;
@@ -72,34 +72,34 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
       #20 reset_n = 1;
    end
 
-   TraceLogger DUT (
-                    .CLK_I              (clk),
-                    .RST_NI             (reset_n),
-                    .CONF_I             (conf),
-                    .STAT_O             (stat),
-                    .RW_TURN_I          (rw_turn),
-                    .WRITE_O            (write),
-                    .WRITE_ALLOW_I      (write_allow),
-                    .READ_ALLOW_I       (read_allow),
-                    .READ_PTR_O         (read_ptr),
-                    .DMEM_I             (dword_in),
-                    .WRITE_PTR_O        (write_ptr),
-                    .DMEM_O             (dword_out),
+   Logger DUT (
+               .CLK_I              (clk),
+               .RST_NI             (reset_n),
+               .CONF_I             (conf),
+               .STAT_O             (stat),
+               .RW_TURN_I          (rw_turn),
+               .WRITE_O            (write),
+               .WRITE_ALLOW_I      (write_allow),
+               .READ_ALLOW_I       (read_allow),
+               .READ_PTR_O         (read_ptr),
+               .DMEM_I             (dword_in),
+               .WRITE_PTR_O        (write_ptr),
+               .DMEM_O             (dword_out),
 
-                    .MODE_O             (mode),
-                    .NTRACE_O           (num_traces),
-                    .EVENT_POS_I        (event_pos),
-                    .TRG_EVENT_I        (trg_event),
-                    .TRG_DELAYED_O      (trg_delayed),
+               .MODE_O             (mode),
+               .NTRACE_O           (num_traces),
+               .EVENT_POS_I        (event_pos),
+               .TRG_EVENT_I        (trg_event),
+               .TRG_DELAYED_O      (trg_delayed),
 
-                    .DATA_O             (data_out),
-                    .LOAD_REQUEST_I     (load_request),
-                    .LOAD_GRANT_O       (load_grant),
+               .DATA_O             (data_out),
+               .LOAD_REQUEST_I     (load_request),
+               .LOAD_GRANT_O       (load_grant),
 
-                    .DATA_I             (data_in),
-                    .STORE_I            (store),
-                    .STORE_PERM_O       (store_perm)
-                    );
+               .DATA_I             (data_in),
+               .STORE_I            (store),
+               .STORE_PERM_O       (store_perm)
+               );
 
    // Set control signals to default values and set reset signal.
    task reset_to_default;
@@ -258,7 +258,6 @@ module TB_TRACELOGGER (/*AUTOARG*/ ) ;
       $dumpvars;
    end
 
-`include "TB_TraceLogger_Assertions.svh"
+`include "TB_Logger_Assertions.svh"
 
-endmodule // TB_TRACELOGGER
-
+endmodule // TB_LOGGER
