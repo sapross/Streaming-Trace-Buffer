@@ -21,7 +21,7 @@ module StreamTraceBuffer
 
    output logic                       CONTROL_READY_O,
    input logic                        CONTROL_VALID_I,
-   input logic [$bits(control_t)-1:0]  CONTROL_I,
+   input logic [$bits(control_t)-1:0] CONTROL_I,
 
    // Data IO Interface
    input logic                        DATA_READY_I,
@@ -57,28 +57,24 @@ module StreamTraceBuffer
    control_t control;
    status_t status;
 
-   RV_Interface contrl_stat_intf
+   RV_Interface #($bits(control_t), $bits(status_t))
+   contrl_stat_intf
      (
-      CLK_I          (CLK_I),
-      RST_NI         (RST_NI),
-
-      READ_READY_I   (STATUS_READY_I),
-      READ_VALID_O   (STATUS_VALID_O),
-      READ_DATA_O    (STATUS_O),
-
-      WRITE_READY_O  (CONTROL_READY_O),
-      WRITE_VALID_I  (CONTROL_VALID_I),
-      WRITE_DATA_I   (CONTROL_I),
-
-      READ_ENABLE_I  (1),
-      WRITE_ENABLE_I (1),
-
-      UPDATE_O       (control_update),
-      DATA_O         (control),
-
-      CHANGE_I       (status_change),
-      DATA_I         (status),
-      READ_O         ()
+      .CLK_I          (CLK_I),
+      .RST_NI         (RST_NI),
+      .READ_READY_I   (STATUS_READY_I),
+      .READ_VALID_O   (STATUS_VALID_O),
+      .READ_DATA_O    (STATUS_O),
+      .WRITE_READY_O  (CONTROL_READY_O),
+      .WRITE_VALID_I  (CONTROL_VALID_I),
+      .WRITE_DATA_I   (CONTROL_I),
+      .READ_ENABLE_I  (1'b1),
+      .WRITE_ENABLE_I (1'b1),
+      .UPDATE_O       (control_update),
+      .DATA_O         (control),
+      .CHANGE_I       (status_change),
+      .DATA_I         (status),
+      .READ_O         ()
       );
 
    logic [TRB_WIDTH-1:0]              sys_data, mem_data;
@@ -86,28 +82,24 @@ module StreamTraceBuffer
    logic                              read_allow, write_allow;
 
 
-   RV_Interface data_intf
+   RV_Interface #(TRB_WIDTH, TRB_WIDTH)
+     data_intf
      (
-      CLK_I          (CLK_I),
-      RST_NI         (RST_NI),
-
-      READ_READY_I   (DATA_READY_I),
-      READ_VALID_O   (DATA_VALID_O),
-      READ_DATA_O    (DATA_O),
-
-      WRITE_READY_O  (DATA_READY_O),
-      WRITE_VALID_I  (DATA_VALID_I),
-      WRITE_DATA_I   (DATA_I),
-
-      READ_ENABLE_I  (read_allow),
-      WRITE_ENABLE_I (write_allow),
-
-      UPDATE_O       (sys_write),
-      DATA_O         (sys_data),
-
-      CHANGE_I       (0),
-      DATA_I         (mem_data),
-      READ_O         (sys_read)
+      .CLK_I          (CLK_I),
+      .RST_NI         (RST_NI),
+      .READ_READY_I   (DATA_READY_I),
+      .READ_VALID_O   (DATA_VALID_O),
+      .READ_DATA_O    (DATA_O),
+      .WRITE_READY_O  (DATA_READY_O),
+      .WRITE_VALID_I  (DATA_VALID_I),
+      .WRITE_DATA_I   (DATA_I),
+      .READ_ENABLE_I  (read_allow),
+      .WRITE_ENABLE_I (write_allow),
+      .UPDATE_O       (sys_write),
+      .DATA_O         (sys_data),
+      .CHANGE_I       (1'b0),
+      .DATA_I         (mem_data),
+      .READ_O         (sys_read)
       );
 
 
@@ -137,7 +129,7 @@ module StreamTraceBuffer
       .LOGGER_DATA_O         (log_data_in),
       .TRG_EVENT_I           (trg_event),
 
-      .MODE_I                (control.mode),
+      .MODE_I                (control.trg_mode),
       .WRITE_ALLOW_O         (write_allow),
       .READ_ALLOW_O          (read_allow),
       .READ_DATA_O           (mem_data),
