@@ -80,18 +80,11 @@ module TraceLogger
    // -----------------------------------------------------------------
    logic                                               log_load_request;
    logic                                               trc_load_request;
-`ifdef CDC
-   CDC_OL_SYNC load_request_sync (
-                                  .CLK_A_I (FPGA_CLK_I),
-                                  .A_I     (log_load_request),
-                                  .CLK_B_I (CLK_I),
-                                  .B_O     (trc_load_request)
-                                  );
-`else
+   // CDC not neccessary at this point since load_request is held for more
+   // than one cycle in FPGA domain with slower or equal frequency.
    always_ff @(posedge CLK_I) begin
       log_load_request <= trc_load_request;
    end
-`endif
 
    // -----------------------------------------------------------------
    //  --- Control Signal Group ---
@@ -105,12 +98,15 @@ module TraceLogger
    bit [TRB_NTRACE_BITS-1:0]                           trc_num_traces;
    //  -- Synchronizing signal
    logic                                               log_control_update;
+   assign log_control_update = CONTROL_UPDATE_I;
+
    logic                                               trc_control_update;
 
 `ifdef CDC
    CDC_MCP_TOGGLE #(.WIDTH(1 + TRB_NTRACE_BITS ))
    cdc_control
      (
+      .RST_A_NI (RST_NI),
       .CLK_A_I  (CLK_I),
       .DATA_A_I ({log_mode, log_num_traces}),
       .SYNC_A_I (log_control_update),
@@ -148,6 +144,7 @@ module TraceLogger
    CDC_MCP_TOGGLE #(.WIDTH(1 + $clog2(TRB_WIDTH) + TRB_WIDTH))
    cdc_trace_status
      (
+      .RST_A_NI (!trc_control_update),
       .CLK_A_I  (FPGA_CLK_I),
       .DATA_A_I ({trc_trg_event, trc_event_pos, trc_data_out}),
       .SYNC_A_I (trc_store),
@@ -185,6 +182,7 @@ module TraceLogger
    CDC_MCP_TOGGLE #(.WIDTH(1 + TRB_WIDTH))
    cdc_stream
      (
+      .RST_A_NI (RST_NI),
       .CLK_A_I  (CLK_I),
       .DATA_A_I ({log_trg_delayed, log_data_out}),
       .SYNC_A_I (log_load_grant),
