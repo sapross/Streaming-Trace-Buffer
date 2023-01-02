@@ -198,12 +198,11 @@ module Logger (
       end
    end
 
-   logic pending_read;
+   logic pending_read, finished_read;
    always_ff @(posedge CLK_I) begin : READ_PROC
       if (!RST_NI) begin
          pending_read <= 0;
-         DATA_O <= '0;
-         LOAD_GRANT_O <= 0;
+         finished_read <= 0;
          if(!control.trg_mode) begin
             // In Trace Mode, the write pointer is placed behind the
             // read pointer.
@@ -215,19 +214,40 @@ module Logger (
          end
       end
       else begin
-         LOAD_GRANT_O <= 0;
-         if (LOAD_REQUEST_I) begin
+         if(!LOAD_REQUEST_I) begin
+            finished_read <= 0;
+         end
+         if (LOAD_REQUEST_I && !finished_read) begin
             pending_read <= 1;
          end
-         if (read_valid) begin
-            if (pending_read && !RW_TURN_I) begin
+
+         if (!finished_read && read_valid) begin
+            if ((LOAD_REQUEST_I || pending_read) && !RW_TURN_I) begin
                pending_read <= 0;
-               DATA_O <= DMEM_I;
-               LOAD_GRANT_O <= 1;
+               finished_read <= 1;
                read_ptr <= (read_ptr + 1) % TRB_DEPTH;
             end
          end
       end
    end
+   always_comb begin : READ_DATA_OUT
+      if(!RST_NI) begin
+         DATA_O = '0;
+         LOAD_GRANT_O = 0;
+      end
+      else begin
+         LOAD_GRANT_O = 0;
+         DATA_O = '0;
+         if (!finished_read && read_valid) begin
+            if ((LOAD_REQUEST_I || pending_read) && !RW_TURN_I) begin
+               DATA_O = DMEM_I;
+               LOAD_GRANT_O = 1;
+            end
+         end
+      end
+   end
+
+
+
 
 endmodule // Logger

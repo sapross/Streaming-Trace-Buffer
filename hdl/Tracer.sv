@@ -204,7 +204,7 @@ module Tracer (
    // end
 
    logic new_data;
-   assign  LOAD_REQUEST_O  = start & ~new_data;
+   assign  LOAD_REQUEST_O  = start & ~new_data & ~LOAD_GRANT_I;
 
    always_ff @(posedge FPGA_CLK_I) begin : STREAM_PROCESS
       if (RST_I) begin
@@ -228,11 +228,11 @@ module Tracer (
                // Overflow of trace position is used here to ensure stream
                // register contains new data the same cycle stream position
                // becomes zero again.
-               if (trace_pos == 0 && new_data) begin
+               if (trace_pos == 0 && (new_data || LOAD_GRANT_I)) begin
                   stream[TRB_WIDTH-1:0] <= DATA_I;
                   // Since data at the DATA_I port has been loaded into the
                   // stream register, it is no longer new.
-                  new_data = 0;
+                  new_data <= 0;
                end
             end // if (!MODE_I)
             else begin

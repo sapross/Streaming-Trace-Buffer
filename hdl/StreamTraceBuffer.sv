@@ -111,7 +111,6 @@ module StreamTraceBuffer
    logic                              log_write;
    logic [TRB_WIDTH-1:0]              log_data_in;
    logic [TRB_WIDTH-1:0]              log_data_out;
-   logic                              trg_event;
 
 
    MemoryController mem_cntrl
@@ -127,7 +126,7 @@ module StreamTraceBuffer
       .LOGGER_WRITE_I        (log_write),
       .LOGGER_DATA_I         (log_data_out),
       .LOGGER_DATA_O         (log_data_in),
-      .TRG_EVENT_I           (trg_event),
+      .TRG_EVENT_I           (status.trg_event),
 
       .MODE_I                (control.trg_mode),
       .WRITE_ALLOW_O         (write_allow),
@@ -143,9 +142,9 @@ module StreamTraceBuffer
       .CLK_I              (CLK_I),
       .RST_NI             (RST_NI),
 
-      .CONTROL_I             (control),
-      .CONTROL_UPDATE_I      (control_update),
-      .STATUS_O             (status),
+      .CONTROL_I          (control),
+      .CONTROL_UPDATE_I   (control_update),
+      .STATUS_O           (status),
 
       .RW_TURN_I          (rw_turn),
 
