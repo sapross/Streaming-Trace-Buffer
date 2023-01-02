@@ -135,17 +135,17 @@ module TraceLogger
    //  -- Data signals
    // Tracer
    logic                                               trc_trg_event;
-   logic [$clog(TRB_WIDTH)-1:0]                        trc_event_pos;
+   logic [$clog2(TRB_WIDTH)-1:0]                        trc_event_pos;
    logic [TRB_WIDTH-1:0]                               trc_data_out;
    // Logger
    logic                                               log_trg_event;
-   logic [$clog(TRB_WIDTH)-1:0]                        log_event_pos;
+   logic [$clog2(TRB_WIDTH)-1:0]                        log_event_pos;
    logic [TRB_WIDTH-1:0]                               log_data_in;
    //  -- Synchronizing signal
    logic                                               trc_store;
    logic                                               log_store;
 `ifdef CDC
-   CDC_MCP_TOGGLE #(.WIDTH(1 + $clog(TRB_WIDTH) + TRB_WIDTH))
+   CDC_MCP_TOGGLE #(.WIDTH(1 + $clog2(TRB_WIDTH) + TRB_WIDTH))
    cdc_trace_status
      (
       .CLK_A_I  (FPGA_CLK_I),
@@ -153,7 +153,7 @@ module TraceLogger
       .SYNC_A_I (trc_store),
 
       .CLK_B_I  (CLK_I),
-      .DATA_B_O ({log_trg_event, log_event_pos, log_data_out}),
+      .DATA_B_O ({log_trg_event, log_event_pos, log_data_in}),
       .SYNC_B_O (log_store)
       );
 `else
@@ -190,7 +190,7 @@ module TraceLogger
       .SYNC_A_I (log_load_grant),
 
       .CLK_B_I  (FPGA_CLK_I),
-      .DATA_B_O ({trc_trg_delayed, trc_data_out}),
+      .DATA_B_O ({trc_trg_delayed, trc_data_in}),
       .SYNC_B_O (trc_load_grant)
       );
 `else
@@ -208,8 +208,8 @@ module TraceLogger
      (
       .CLK_I           (CLK_I),
       .RST_NI          (RST_NI),
-      .CONTROL_I          (CONTROL_I),
-      .STATUS_O          (STATUS_O),
+      .CONTROL_I       (CONTROL_I),
+      .STATUS_O        (STATUS_O),
       .RW_TURN_I       (RW_TURN_I),
       .WRITE_O         (WRITE_O),
       .WRITE_ALLOW_I   (WRITE_ALLOW_I),
