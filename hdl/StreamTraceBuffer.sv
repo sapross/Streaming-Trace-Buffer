@@ -21,7 +21,7 @@ module StreamTraceBuffer
 
    output logic                       CONTROL_READY_O,
    input logic                        CONTROL_VALID_I,
-   input logic [$bits(config_t)-1:0]  CONTROL_I,
+   input logic [$bits(control_t)-1:0]  CONTROL_I,
 
    // Data IO Interface
    input logic                        DATA_READY_I,
@@ -54,8 +54,8 @@ module StreamTraceBuffer
 
    logic                              control_update;
    logic                              status_change;
-   conf_t control;
-   stat_t status;
+   control_t control;
+   status_t status;
 
    RV_Interface contrl_stat_intf
      (
@@ -141,7 +141,7 @@ module StreamTraceBuffer
       .WRITE_ALLOW_O         (write_allow),
       .READ_ALLOW_O          (read_allow),
       .READ_DATA_O           (mem_data),
-      .READ_I                (sys_read)
+      .READ_I                (sys_read),
       .WRITE_DATA_I          (sys_data),
       .WRITE_I               (sys_write)
       );
@@ -151,9 +151,9 @@ module StreamTraceBuffer
       .CLK_I              (CLK_I),
       .RST_NI             (RST_NI),
 
-      .CONF_I             (control),
-      .CONF_UPDATE_I      (control_update),
-      .STAT_O             (status),
+      .CONTROL_I             (control),
+      .CONTROL_UPDATE_I      (control_update),
+      .STATUS_O             (status),
 
       .RW_TURN_I          (rw_turn),
 

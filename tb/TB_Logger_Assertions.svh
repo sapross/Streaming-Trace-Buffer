@@ -12,7 +12,7 @@
 property outputs_after_reset_prop;
    @(posedge clk)
      (!reset_n) |-> ##1
-       stat == STATUS_DEFAULT &&
+       status == STATUS_DEFAULT &&
              write == 0 &&
              dword_out == '0 &&
              data_out == '0 &&
@@ -102,7 +102,7 @@ always_ff @(posedge clk) begin : store_to_memory_assert
       end
       else begin
          if (assert_pending_write) begin
-            if(rw_turn && write_allow && write_ptr != read_ptr && !stat.trg_event) begin
+            if(rw_turn && write_allow && write_ptr != read_ptr && !status.trg_event) begin
                assert(write)
                  else
                    $error ("%m write operation did not occur on next rw_turn.");
@@ -139,7 +139,7 @@ always_ff @(posedge clk) begin : trg_delay_assert_proc
    end
    else begin
       if (! trg_event) begin
-         assert_delay <= 1 + ((conf.trg_delay+1)*(TRB_DEPTH-1))/ (2**TRB_DELAY_BITS);
+         assert_delay <= 1 + ((control.trg_delay+1)*(TRB_DEPTH-1))/ (2**TRB_DELAY_BITS);
          assert (!trg_delayed)
            else
              $error("%m unexpected trg_delayed");

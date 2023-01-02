@@ -18,8 +18,8 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    logic clk;
    logic reset_n;
 
-   config_t conf;
-   status_t stat;
+   control_t control;
+   status_t status;
 
    logic rw_turn;
    logic write;
@@ -54,9 +54,9 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
 
    initial begin
       reset_n = 0;
-      conf.trg_mode = 0;
-      conf.trg_num_traces =0;
-      conf.trg_delay = 0;
+      control.trg_mode = 0;
+      control.trg_num_traces =0;
+      control.trg_delay = 0;
       rw_turn = 0;
       write_allow = 0;
       read_allow = 0;
@@ -75,8 +75,8 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    Logger DUT (
                .CLK_I              (clk),
                .RST_NI             (reset_n),
-               .CONF_I             (conf),
-               .STAT_O             (stat),
+               .CONTROL_I             (control),
+               .STATUS_O             (status),
                .RW_TURN_I          (rw_turn),
                .WRITE_O            (write),
                .WRITE_ALLOW_I      (write_allow),
@@ -104,7 +104,7 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    // Set control signals to default values and set reset signal.
    task reset_to_default;
       reset_n = 0;
-      conf = CONFIG_DEFAULT;
+      control = CONTROL_DEFAULT;
       rw_turn = 0;
       write_allow = 0;
       read_allow = 0;
@@ -131,7 +131,7 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
          reset_to_default();
          read_allow <= 1;
          write_allow <= 1;
-         conf.trg_delay <= delay;
+         control.trg_delay <= delay;
          @(posedge clk);
          // Lift reset.
          reset_n <= 1;
@@ -185,7 +185,7 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
          // Control setup
          reset_to_default();
          store <= 0;
-         conf.trg_mode <= mode;
+         control.trg_mode <= mode;
          max_num_reads <= 1;
          if(!mode) begin
             max_num_reads <= TRB_DEPTH;

@@ -7,7 +7,7 @@
 -- Author     : Stephan Proß <s.pross@stud.uni-heidelberg.de>
 -- Company    :
 -- Created    : 2022-09-13
--- Last update: 2022-12-12
+-- Last update: 2023-01-02
 -- Platform   :
 -- Standard   : VHDL'08
 -------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ package dtb_pkg is
   constant trb_max_traces : natural := 8;
   constant trb_max_traces_bits : natural := natural(ceil(log2(ceil(log2(real(trb_max_traces))))));
 
-  type config_t is record
+  type control_t is record
     -- Reset trigger logic.
     trg_reset : std_logic_vector(0 downto 0);
     -- Enable for logic.
@@ -51,10 +51,10 @@ package dtb_pkg is
     trg_mode : std_logic_vector(0 downto 0);
     -- Controls when trace recording is stopped after trigger is received.
     trg_delay : std_logic_vector(2 downto 0);
-  end record config_t;
+  end record control_t;
 
   constant config_bits    : natural := 6;
-  constant config_default : config_t
+  constant config_default : control_t
  :=
  (
    trg_reset => "0",
@@ -63,9 +63,9 @@ package dtb_pkg is
    trg_delay => (others => '1')
  );
 
-  function slv_to_config (value : std_logic_vector(config_bits - 1 downto 0)) return config_t;
+  function slv_to_config (value : std_logic_vector(config_bits - 1 downto 0)) return control_t;
 
-  function config_to_slv (config : config_t) return std_logic_vector;
+  function control_to_slv (config : control_t) return std_logic_vector;
 
   type status_t is record
     -- Has the trigger been hit?
@@ -89,15 +89,15 @@ package dtb_pkg is
 
   function slv_to_status (value : std_logic_vector(status_bits - 1 downto 0)) return status_t;
 
-  type sysint_config_t is record
+  type sysint_control_t is record
     op       :   std_logic;
     auto_inc :  std_logic;
     addr     : std_logic_vector(trb_addr_bits - 1 downto 0);
-  end record sysint_config_t;
+  end record sysint_control_t;
 
   constant sysconfig_bits : natural := 2 + trb_addr_bits;
 
-  constant sysconf_default : sysint_config_t :=
+  constant sysconf_default : sysint_control_t :=
   (
     op => '0',
     auto_inc => '0',
@@ -108,7 +108,7 @@ end package dtb_pkg;
 
 package body dtb_pkg is
 
-  function config_to_slv (config : config_t) return std_logic_vector is
+  function control_to_slv (config : control_t) return std_logic_vector is
   begin
 
     return config.trg_reset &
@@ -116,9 +116,9 @@ package body dtb_pkg is
       config.trg_mode &
       config.trg_delay;
 
-  end function config_to_slv;
+  end function control_to_slv;
 
-  function slv_to_config (value : std_logic_vector(config_bits - 1 downto 0)) return config_t is
+  function slv_to_config (value : std_logic_vector(config_bits - 1 downto 0)) return control_t is
   begin
 
     return (

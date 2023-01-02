@@ -9,7 +9,7 @@
 // Status          : Unknown, Use with caution!
 
 
-module RV_INTERFACE
+module RV_Interface
   #(
     parameter integer unsigned WRITE_WIDTH = 8,
     parameter integer unsigned READ_WIDTH = 8
@@ -92,4 +92,4 @@ module RV_INTERFACE
       end
    end
 
-endmodule // RV_INTERFACE
+endmodule // RV_Interface

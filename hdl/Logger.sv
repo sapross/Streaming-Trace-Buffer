@@ -15,8 +15,8 @@ module Logger (
                input logic                         CLK_I,
                input logic                         RST_NI,
 
-               input logic [$bits(config_t)-1:0]   CONF_I,
-               output logic [$bits(status_t)-1:0]  STAT_O,
+               input logic [$bits(control_t)-1:0]   CONTROL_I,
+               output logic [$bits(status_t)-1:0]  STATUS_O,
 
                // Read & Write strobe. Indicates that a write operation
                // can be performed in the current cycle.
@@ -71,17 +71,17 @@ module Logger (
 
 
    // Forwarding of relevant config fields to Tracer
-   config_t conf;
-   assign conf = CONF_I;
+   control_t control;
+   assign control = CONTROL_I;
 
-   assign MODE_O = conf.trg_mode;
-   assign NTRACE_O = conf.trg_num_traces;
+   assign MODE_O = control.trg_mode;
+   assign NTRACE_O = control.trg_num_traces;
 
    // Forwarding of status to Interface.
-   status_t stat;
-   assign STAT_O = stat;
-   assign stat.event_pos = EVENT_POS_I;
-   assign TRG_DELAYED_O = stat.trg_event;
+   status_t status;
+   assign STATUS_O = status;
+   assign status.event_pos = EVENT_POS_I;
+   assign TRG_DELAYED_O = status.trg_event;
 
    // -----------------------------------------------------------------------------
    // --- (Pre-)Trigger Event Handling ---
@@ -89,7 +89,7 @@ module Logger (
 
    // Address on which TRG_EVENT_I flipped from 0 to 1.
    bit [TRB_ADDR_WIDTH-1:0]                        event_address;
-   assign stat.event_addr = event_address;
+   assign status.event_addr = event_address;
 
    // Memory write pointer
    bit [TRB_ADDR_WIDTH-1:0]                        write_ptr;
@@ -128,17 +128,17 @@ module Logger (
          // Formular for the limit L:
          // Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
          // L = n/N * P - 1
-         hist_count <= ((conf.trg_delay+1) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS );
-         stat.trg_event <= 0;
+         hist_count <= ((control.trg_delay+1) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS );
+         status.trg_event <= 0;
       end
       else begin
          if (write && RW_TURN_I) begin
             if (hist_count > 0) begin
                hist_count <= hist_count - 1;
-               stat.trg_event <= 0;
+               status.trg_event <= 0;
             end
             else begin
-               stat.trg_event <= 1;
+               status.trg_event <= 1;
             end
          end
       end // else: !if(!RST_NI || !TRB_EVENT_I)
@@ -165,14 +165,14 @@ module Logger (
    assign STORE_PERM_O = write_valid;
    assign write_valid = WRITE_ALLOW_I
                         && (write_ptr + 1) % TRB_DEPTH != read_ptr
-                        && !stat.trg_event;
+                        && !status.trg_event;
 
    assign write = pending_write & RW_TURN_I & write_valid;
    always_ff @(posedge CLK_I) begin : WRITE_PROC
       if (!RST_NI) begin
          pending_write <= 0;
          DMEM_O <= '0;
-         if(!conf.trg_mode) begin
+         if(!control.trg_mode) begin
             // In Trace Mode, the write pointer is placed behind the
             // read pointer.
             write_ptr <= 0;
@@ -204,7 +204,7 @@ module Logger (
          pending_read <= 0;
          DATA_O <= '0;
          LOAD_GRANT_O <= 0;
-         if(!conf.trg_mode) begin
+         if(!control.trg_mode) begin
             // In Trace Mode, the write pointer is placed behind the
             // read pointer.
             read_ptr <= 1;

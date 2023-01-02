@@ -18,18 +18,18 @@ package DTB_PKG;
    localparam integer unsigned  TRB_MAX_TRACES = 8;
    localparam integer unsigned  TRB_NTRACE_BITS = $clog2($clog2(TRB_MAX_TRACES));
 
-
    typedef struct               packed {
       logic                     trg_mode;
       logic [TRB_NTRACE_BITS-1:0] trg_num_traces;
       logic [TRB_DELAY_BITS-1:0]  trg_delay;
-   } config_t;
+   } control_t;
 
-   localparam                     config_t CONFIG_DEFAULT = '{
+   localparam                     control_t CONTROL_DEFAULT = '{
                                                               trg_mode:0,
                                                               trg_num_traces:0,
                                                               trg_delay:'1
                                                               };
+
 
    typedef struct                 packed {
       logic                       trg_event;

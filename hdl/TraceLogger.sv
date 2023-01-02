@@ -17,9 +17,9 @@ module TraceLogger
    input logic                        CLK_I,
    input logic                        RST_NI,
 
-   input logic [$bits(config_t)-1:0]  CONF_I,
-   input logic                        CONF_UPDATE_I,
-   output logic [$bits(status_t)-1:0] STAT_O,
+   input logic [$bits(control_t)-1:0]  CONTROL_I,
+   input logic                        CONTROL_UPDATE_I,
+   output logic [$bits(status_t)-1:0] STATUS_O,
 
    // Read & Write strobe. Indicates that a write operation
    // can be performed in the current cycle.
@@ -104,8 +104,8 @@ module TraceLogger
    logic                                               trc_mode;
    bit [TRB_NTRACE_BITS-1:0]                           trc_num_traces;
    //  -- Synchronizing signal
-   logic                                               log_conf_update;
-   logic                                               trc_conf_update;
+   logic                                               log_control_update;
+   logic                                               trc_control_update;
 
 `ifdef CDC
    CDC_MCP_TOGGLE #(.WIDTH(1 + TRB_NTRACE_BITS ))
@@ -113,16 +113,16 @@ module TraceLogger
      (
       .CLK_A_I  (CLK_I),
       .DATA_A_I ({log_mode, log_num_traces}),
-      .SYNC_A_I (log_conf_update),
+      .SYNC_A_I (log_control_update),
 
       .CLK_B_I  (FPGA_CLK_I),
       .DATA_B_O ({trc_mode, trc_num_traces}),
-      .SYNC_B_O (trc_conf_update)
+      .SYNC_B_O (trc_control_update)
       );
 `else
    always_ff @(posedge FPGA_CLK_I) begin : REGISTER_CONTROL
-      trc_conf_update <= log_conf_update;
-      if(trc_conf_update) begin
+      trc_control_update <= log_control_update;
+      if(trc_control_update) begin
          trc_mode <= log_mode;
          trc_num_traces <= log_num_traces;
       end
@@ -208,8 +208,8 @@ module TraceLogger
      (
       .CLK_I           (CLK_I),
       .RST_NI          (RST_NI),
-      .CONF_I          (CONF_I),
-      .STAT_O          (STAT_O),
+      .CONTROL_I          (CONTROL_I),
+      .STATUS_O          (STATUS_O),
       .RW_TURN_I       (RW_TURN_I),
       .WRITE_O         (WRITE_O),
       .WRITE_ALLOW_I   (WRITE_ALLOW_I),
@@ -234,7 +234,7 @@ module TraceLogger
 
    Tracer trc_1
      (
-      .RST_I                (CONF_UPDATE_I),
+      .RST_I                (CONTROL_UPDATE_I),
       .MODE_I               (trc_mode),
       .NTRACE_I             (trc_num_traces),
       .EVENT_POS_O          (trc_event_pos),
