@@ -64,7 +64,7 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
       fpga_clk = 0;
       fpga_clk_count =0;
       fpga_clk_offset =0;
-      fpga_clk_frequency = 1;
+      fpga_clk_frequency = 20;
    end
    always begin
       if (fpga_clk_offset > 0) begin
