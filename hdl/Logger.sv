@@ -164,7 +164,7 @@ module Logger (
    logic                    write_valid;
    assign STORE_PERM_O = write_valid;
    assign write_valid = WRITE_ALLOW_I
-                        && (write_ptr + 1) % TRB_DEPTH != read_ptr
+                        && write_ptr != read_ptr
                         && !status.trg_event;
 
    assign write = pending_write & RW_TURN_I & write_valid;

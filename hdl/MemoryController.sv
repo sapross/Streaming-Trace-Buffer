@@ -75,8 +75,8 @@ module MemoryController (
    assign WRITE_ALLOW_O = sys_write_allow;
 
 
-   assign log_read_allow = log_rptr != sys_wptr;
-   assign log_write_allow = incmod_unequal(log_wptr, log_rptr);
+   assign log_read_allow = !MODE_I || log_rptr != sys_wptr;
+   assign log_write_allow = !MODE_I || incmod_unequal(log_wptr, log_rptr);
 
    assign sys_read_allow = sys_rptr != log_wptr;
    assign sys_write_allow = incmod_unequal(sys_wptr, sys_rptr);
@@ -175,12 +175,12 @@ module MemoryController (
       .rd_data(read_data),
       .wr_addr(write_addr),
       .wr_data(write_data),
-      .C0(0), // {C0,C1} = Write Mask
-      .C1(0),
-      .C2(0), // {C2,C3} = Read Mask
-      .C3(0),
-      .C4(1), // Always Write Enable
-      .C5(0)  // Register output?
+      .C0(1'b0), // {C0,C1} = Write Mask
+      .C1(1'b0),
+      .C2(1'b0), // {C2,C3} = Read Mask
+      .C3(1'b0),
+      .C4(1'b1), // Always Write Enable
+      .C5(1'b0)  // Register output?
       );
 `else
    SimBRAM_1KB bram
@@ -190,12 +190,12 @@ module MemoryController (
       .rd_data(read_data),
       .wr_addr(write_addr),
       .wr_data(write_data),
-      .C0(0), // {C0,C1} = Write Mask
-      .C1(0),
-      .C2(0), // {C2,C3} = Read Mask
-      .C3(0),
-      .C4(1), // Always Write Enable
-      .C5(0)  // Register output?
+      .C0(1'b0), // {C0,C1} = Write Mask
+      .C1(1'b0),
+      .C2(1'b0), // {C2,C3} = Read Mask
+      .C3(1'b0),
+      .C4(1'b1), // Always Write Enable
+      .C5(1'b0)  // Register output?
       );
 `endif
 
