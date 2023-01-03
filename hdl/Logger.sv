@@ -15,7 +15,7 @@ module Logger (
                input logic                         CLK_I,
                input logic                         RST_NI,
 
-               input logic [$bits(control_t)-1:0]   CONTROL_I,
+               input logic [$bits(control_t)-1:0]  CONTROL_I,
                output logic [$bits(status_t)-1:0]  STATUS_O,
 
                // Read & Write strobe. Indicates that a write operation
@@ -39,7 +39,7 @@ module Logger (
 
                // Config & Status exchange
                // Mode bit switches from trace-buffer to data-streaming mode.
-               output logic                        MODE_O,
+               output logic [1:0]                  MODE_O,
                // Number of traces captured in parallel.
                output bit [TRB_NTRACE_BITS-1:0]    NTRACE_O,
 
@@ -157,22 +157,38 @@ module Logger (
 
    logic                    read_valid;
    assign read_valid = READ_ALLOW_I
-                       && read_ptr != write_ptr;
+                       && (read_ptr+1) % TRB_DEPTH != write_ptr;
 
    // Writing becomes invalid if the next pointer value equals the read pointer or
    // the delayed trg_event is set.
    logic                    write_valid;
    assign STORE_PERM_O = write_valid;
-   assign write_valid = WRITE_ALLOW_I
-                        && write_ptr != read_ptr
-                        && !status.trg_event;
+   // Writing is possible if the MemoryController allows writes,
+   // the write_ptr is not equal to the read_ptr (ignored if in
+   // Trace-Mode) and the delayed trigger event hasn't fired yet.
+   logic                    ignore_pointer_collision;
+
+   // In either trace or r-stream mode, correct output of memory through
+   // the tracer is not the priority.
+   assign ignore_pointer_collision = control.trg_mode == trace_mode
+                                     || control.trg_mode == r_stream_mode;
+
+   // Writing is valid so long the MemoryController allows it.
+   // Further conditions are tied to mode of operation:
+   //  - Writing is disabled if the delayed trg_event has fired in
+   //    only in Trace-Mode.
+   //  - Pointer collision of logger internal pointers are only relevant
+   //    when in RW-Streaming mode.
+   assign write_valid = WRITE_ALLOW_I &&
+                        (control.trg_mode != rw_stream_mode || write_ptr != read_ptr) &&
+                        (control.trg_mode != trace_mode || !status.trg_event);
 
    assign write = pending_write & RW_TURN_I & write_valid;
    always_ff @(posedge CLK_I) begin : WRITE_PROC
       if (!RST_NI) begin
          pending_write <= 0;
          DMEM_O <= '0;
-         if(!control.trg_mode) begin
+         if(control.trg_mode == trace_mode) begin
             // In Trace Mode, the write pointer is placed behind the
             // read pointer.
             write_ptr <= 0;
@@ -203,7 +219,7 @@ module Logger (
       if (!RST_NI) begin
          pending_read <= 0;
          finished_read <= 0;
-         if(!control.trg_mode) begin
+         if(control.trg_mode == trace_mode) begin
             // In Trace Mode, the write pointer is placed behind the
             // read pointer.
             read_ptr <= 1;

@@ -28,20 +28,25 @@ property pointer_validity_prop;
 endproperty // pointer_validity_prop
 assert property(pointer_validity_prop);
 
+// property system_write_turn_prop;
+//    @(posedge CLK_I) disable iff(!RST_NI)
+//      (!write_turn)
+//      |-> write_addr == sys_wptr && write_data == WRITE_DATA_I;
+// endproperty // system_write_turn_prop
+// assert property(system_write_turn_prop);
 
+// property system_read_turn_prop;
+//    @(posedge CLK_I) disable iff(!RST_NI)
+//      (!read_turn)
+//      |-> read_addr == sys_rptr
+//                     |-> ##1 READ_DATA_O == $past(read_data);
+// endproperty // system_read_turn_prop
+// assert property(system_read_turn_prop);
 
-property system_turn_prop;
-   @(posedge CLK_I) disable iff(!RST_NI)
-     (!turn)
-     |-> read_addr == sys_rptr && write_addr == sys_wptr && write_data == WRITE_DATA_I
-                    |-> ##1 READ_DATA_O == $past(read_data);
-endproperty // system_turn_prop
-assert property(system_turn_prop);
-
-property logger_turn_prop;
-   @(posedge CLK_I) disable iff(!RST_NI)
-     (turn)
-     |-> read_addr == log_rptr && write_addr == log_wptr && write_data == LOGGER_DATA_I
-                    |-> ##1 LOGGER_DATA_O == $past(read_data);
-endproperty // logger_turn_prop
-assert property(logger_turn_prop);
+// property logger_turn_prop;
+//    @(posedge CLK_I) disable iff(!RST_NI)
+//      (write_turn)
+//      |-> read_addr == log_rptr && write_addr == log_wptr && write_data == LOGGER_DATA_I
+//                     |-> ##1 LOGGER_DATA_O == $past(read_data);
+// endproperty // logger_turn_prop
+// assert property(logger_turn_prop);

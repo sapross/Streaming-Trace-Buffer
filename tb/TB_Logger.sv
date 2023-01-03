@@ -31,7 +31,7 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    logic [TRB_ADDR_WIDTH-1:0] write_ptr;
    logic [TRB_WIDTH-1:0]      dword_out;
 
-   logic                      mode;
+   logic [$bits(trg_mode_t)-1:0] mode;
    logic [TRB_NTRACE_BITS-1:0] num_traces;
    logic [$clog2(TRB_WIDTH)-1:0] event_pos;
    logic                         trg_event;
@@ -54,7 +54,7 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
 
    initial begin
       reset_n = 0;
-      control.trg_mode = 0;
+      control.trg_mode = trace_mode;
       control.trg_num_traces =0;
       control.trg_delay = 0;
       rw_turn = 0;
@@ -75,8 +75,8 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    Logger DUT (
                .CLK_I              (clk),
                .RST_NI             (reset_n),
-               .CONTROL_I             (control),
-               .STATUS_O             (status),
+               .CONTROL_I          (control),
+               .STATUS_O           (status),
                .RW_TURN_I          (rw_turn),
                .WRITE_O            (write),
                .WRITE_ALLOW_I      (write_allow),
@@ -180,14 +180,17 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    task test_rand_read;
       int read_count;
       int max_num_reads;
+      trg_mode_t mode;
+      mode <= mode.first();
+
       $display("[ %0t ] Test: Random read until reading is invalid.", $time);
-      for (int mode = 0; mode < 2; mode++ ) begin
+      for (int i = 0; i < mode.num(); i++ ) begin
          // Control setup
          reset_to_default();
          store <= 0;
          control.trg_mode <= mode;
          max_num_reads <= 1;
-         if(!mode) begin
+         if(mode == trace_mode) begin
             max_num_reads <= TRB_DEPTH;
          end
          @(posedge clk);
@@ -214,6 +217,8 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
                end
             end
          end
+
+         mode = mode.next();
       end
    endtask // test_rand_read
 

@@ -48,15 +48,14 @@ module RV_Interface
    logic                              pending_read;
 
    assign READ_DATA_O = DATA_I;
-   assign READ_VALID_O = pending_read;
+   assign READ_VALID_O = pending_read && READ_ENABLE_I;
+   assign READ_O = ~pending_read & READ_READY_I;
 
    always_ff @(posedge CLK_I) begin : READ_PROC
       if(!RST_NI) begin
          pending_read <= 0;
-         READ_O <= 0;
       end
       else begin
-         READ_O <= pending_read & READ_READY_I;
          if (CHANGE_I || READ_ENABLE_I && READ_READY_I) begin
             pending_read <= 1;
          end
@@ -77,7 +76,6 @@ module RV_Interface
    always_ff @(posedge CLK_I) begin : WRITE_PROC
       if(!RST_NI) begin
          pending_write <= 0;
-         WRITE_READY_O <= 0;
          UPDATE_O <= 0;
       end
       else begin

@@ -57,6 +57,17 @@ module StreamTraceBuffer
    control_t control;
    status_t status;
 
+   logic [1:0]                        redge_trigger;
+   always_ff @(posedge CLK_I) begin
+      if (!RST_NI) begin
+         redge_trigger <= '0;
+      end
+      else begin
+         redge_trigger <= {redge_trigger[0], status.trg_event};
+      end
+   end
+   assign status_change = redge_trigger[0] ^ redge_trigger[1];
+
    RV_Interface #($bits(control_t), $bits(status_t))
    contrl_stat_intf
      (

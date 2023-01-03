@@ -17,7 +17,7 @@ module TraceLogger
    input logic                        CLK_I,
    input logic                        RST_NI,
 
-   input logic [$bits(control_t)-1:0]  CONTROL_I,
+   input logic [$bits(control_t)-1:0] CONTROL_I,
    input logic                        CONTROL_UPDATE_I,
    output logic [$bits(status_t)-1:0] STATUS_O,
 
@@ -91,10 +91,10 @@ module TraceLogger
    // -----------------------------------------------------------------
    //  -- Data signals
    // Logger
-   logic                                               log_mode;
+   logic [$bits(trg_mode_t)-1:0]                       log_mode;
    bit [TRB_NTRACE_BITS-1:0]                           log_num_traces;
    // Tracer
-   logic                                               trc_mode;
+   logic [$bits(trg_mode_t)-1:0]                       trc_mode;
    bit [TRB_NTRACE_BITS-1:0]                           trc_num_traces;
    //  -- Synchronizing signal
    logic                                               log_control_update;
@@ -103,7 +103,7 @@ module TraceLogger
    logic                                               trc_control_update;
 
 `ifdef CDC
-   CDC_MCP_TOGGLE #(.WIDTH(1 + TRB_NTRACE_BITS ))
+   CDC_MCP_TOGGLE #(.WIDTH($bits(trg_mode_t) + TRB_NTRACE_BITS ))
    cdc_control
      (
       .RST_A_NI (RST_NI),

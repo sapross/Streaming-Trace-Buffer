@@ -14,7 +14,7 @@ module Tracer (
                // ---- Control & Status signals -----
                input logic                          RST_I,
                // Mode bit switches from trace-buffer to data-streaming mode.
-               input logic                          MODE_I,
+               input logic [1:0]                    MODE_I,
                // Number of traces captured in parallel.
                input bit [TRB_NTRACE_BITS-1:0]      NTRACE_I,
                // Position of the event in the word width of the memory.
@@ -170,39 +170,6 @@ module Tracer (
 
    assign FPGA_STREAM_O = stream[stream_pos +: TRB_MAX_TRACES];
 
-   // // Stream register loading from memory.
-   // // Load pulse generation.
-   // logic       req;
-   // logic       req_prev;
-   // always_ff @(posedge FPGA_CLK_I) begin : REQUEST_PULSE_GEN
-   //    if (RST_I) begin
-   //       req_prev = 0;
-   //    end
-   //    else begin
-   //       req_prev = req;
-   //    end
-   // end
-
-   // // Register signifying whether new_data is present at the
-   // // (registered) DATA_I port.
-   // always_comb  begin : REQUEST_LOGIC
-   //    // No request is issued by default.
-   //    req = 0;
-   //    if (start) begin
-   //       if (!MODE_I) begin
-   //          // Start requesting new data at stream position zero.
-   //          if (stream_pos == 0) begin
-   //             req = 1;
-   //          end
-   //       end
-   //       else begin
-   //          // In streaming mode issue a request the moment no new data
-   //          // is available.
-   //          req = ~new_data;
-   //       end
-   //    end
-   // end
-
    logic new_data;
    assign  LOAD_REQUEST_O  = start & ~new_data & ~LOAD_GRANT_I;
 
@@ -220,7 +187,7 @@ module Tracer (
                // Set new_data if load request has been granted.
                new_data <= 1;
             end
-            if (!MODE_I) begin
+            if (MODE_I == trace_mode) begin
                // ---- Tracer Mode -------
                // Stream position is trace position with one cycle delay.
                stream_pos <= trace_pos;
@@ -234,7 +201,7 @@ module Tracer (
                   // stream register, it is no longer new.
                   new_data <= 0;
                end
-            end // if (!MODE_I)
+            end // if (MODE_I == trace_mode)
             else begin
                // ---- Stream Mode -------
                // If all data has been serialized out of the stream register
@@ -273,7 +240,7 @@ module Tracer (
                      end
                   end
                end
-            end // else: !if(!MODE_I)
+            end // else: !if(MODE_I == trace_mode)
          end // if (start)
       end // else: !if(RST_I)
    end // block: STREAM_PROCESS

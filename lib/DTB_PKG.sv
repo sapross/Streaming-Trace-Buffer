@@ -15,17 +15,26 @@ package DTB_PKG;
    localparam integer unsigned  TRB_DEPTH = 32;
 
    localparam integer unsigned  TRB_DELAY_BITS = 2;
-   localparam integer unsigned  TRB_MAX_TRACES = 8;
+   localparam integer unsigned  TRB_MAX_TRACES = 16;
    localparam integer unsigned  TRB_NTRACE_BITS = $clog2($clog2(TRB_MAX_TRACES));
 
+   typedef enum logic[2:0]
+                {
+                 trace_mode     = 2'b00,
+                 rw_stream_mode = 2'b01,
+                 r_stream_mode  = 2'b10,
+                 w_stream_mode  = 2'b11
+                 } trg_mode_t;
+
+
    typedef struct               packed {
-      logic                     trg_mode;
+      trg_mode_t                  trg_mode;
       logic [TRB_NTRACE_BITS-1:0] trg_num_traces;
       logic [TRB_DELAY_BITS-1:0]  trg_delay;
    } control_t;
 
    localparam                     control_t CONTROL_DEFAULT = '{
-                                                              trg_mode:0,
+                                                              trg_mode:trace_mode,
                                                               trg_num_traces:0,
                                                               trg_delay:'1
                                                               };
