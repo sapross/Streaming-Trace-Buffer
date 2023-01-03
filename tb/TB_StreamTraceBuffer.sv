@@ -179,7 +179,7 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
    task read_status(output status_t value);
       $display("Ready-Valid read of status register.");
       status_ready <= 1;
-      while(!control_valid) begin
+      while(!status_valid) begin
          @(posedge clk);
       end
       value <= status;
@@ -204,6 +204,7 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
       status_t stat;
       logic [TRB_DEPTH-1:0] word;
       logic [TRB_DEPTH-1:0] array [TRB_WIDTH-1:0];
+      int offset = 0;
       for(int i =0; i<TRB_DEPTH; i++) begin
          array[i] = i;
       end
@@ -218,8 +219,11 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
       cntrl.trg_mode <= 0;
       // Set num traces to the highest amount to speed up deserialization
       cntrl.trg_num_traces <= 2**TRB_MAX_TRACES-1;
-      // Set delay to zero for immediate trigger and full history.
+      // Set delay to zero for lowest trigger delay.
       cntrl.trg_delay <= '0;
+
+      offset = ((cntrl.trg_delay+1) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS );
+
       @(posedge clk);
       write_control(cntrl);
 
@@ -228,7 +232,9 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
          fpga_serialize(2**cntrl.trg_num_traces , i);
       end
       trg_in <= 1;
-
+      for(int i = 0; i < TRB_DEPTH; i++) begin
+         fpga_serialize(2**cntrl.trg_num_traces , i);
+      end
 
       @(posedge clk);
       while(!status_valid) begin
@@ -238,6 +244,7 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
 
       for(int i =0; i< TRB_DEPTH; i++) begin
          read_data(word);
+         assert (word == array[(offset + i) % TRB_DEPTH]);
       end
 
    endtask // test_random_read
