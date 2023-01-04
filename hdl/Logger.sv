@@ -79,6 +79,8 @@ module Logger (
 
    // Forwarding of status to Interface.
    status_t status;
+   assign status.zero = '0;
+
    assign STATUS_O = status;
    assign status.event_pos = EVENT_POS_I;
    assign TRG_DELAYED_O = status.trg_event;
@@ -87,23 +89,23 @@ module Logger (
    // --- (Pre-)Trigger Event Handling ---
    // -----------------------------------------------------------------------------
 
-   // Address on which TRG_EVENT_I flipped from 0 to 1.
-   bit [TRB_ADDR_WIDTH-1:0]                        event_address;
-   assign status.event_addr = event_address;
+   // // Address on which TRG_EVENT_I flipped from 0 to 1.
+   // bit [TRB_ADDR_WIDTH-1:0]                        event_address;
+   // assign status.event_addr = event_address;
 
    // Memory write pointer
    bit [TRB_ADDR_WIDTH-1:0]                        write_ptr;
    assign WRITE_PTR_O = write_ptr;
    // Registered (sticky) trg_event.
    logic                                           trg_event;
-   always_ff @(posedge CLK_I) begin : SAVE_EVENT_ADDRESS
+   always_ff @(posedge CLK_I) begin : STICKY_TRG_EVENT_ADDRESS
       if (!RST_NI) begin
          trg_event <= 0;
-         event_address <= '0;
+         // event_address <= '0;
       end
       else if (TRG_EVENT_I == 1 && trg_event == 0) begin
          // Save on which address the trigger has been registered.
-         event_address <= write_ptr;
+         // event_address <= write_ptr;
          trg_event <= 1;
       end
    end
