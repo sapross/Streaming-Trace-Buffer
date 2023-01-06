@@ -55,7 +55,7 @@ module Tracer (
                output logic [TRB_MAX_TRACES-1:0]    FPGA_STREAM_O,
                // Set to high after trigger event with delay. Usable for daisy-chaining.
                // Indicates whether data is valid in streaming mode.
-               output logic                         FPGA_TRIG_O
+               output logic                         FPGA_DELAYED_TRIG_O
                );
 
    // --------------------------------------------------------------------
@@ -116,12 +116,12 @@ module Tracer (
    // Switch meaning/content of FPGA_TRACE and TRIG output.
    always_comb begin : SWITCH_TRIG_PURPOSE
       if (!MODE_I) begin
-         // FPGA_TRIG_O indicates trigger event after delay.
-         FPGA_TRIG_O = TRG_DELAYED_I;
+         // FPGA_DELAYED_TRIG_O indicates trigger event after delay.
+         FPGA_DELAYED_TRIG_O = TRG_DELAYED_I;
       end
       else begin
-         // FPGA_TRIG_O indicates whether the stream_data is valid.
-         FPGA_TRIG_O = data_valid;
+         // FPGA_DELAYED_TRIG_O indicates whether the stream_data is valid.
+         FPGA_DELAYED_TRIG_O = data_valid;
       end
    end
 

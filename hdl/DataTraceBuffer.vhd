@@ -51,7 +51,7 @@ entity DATATRACEBUFFER is
     -- Bit serial output for data transfer.
     FPGA_DOUT_O         : out   std_logic;
     -- FPGA side signal indicating fulfilled trigger condition and trace acquisition.
-    FPGA_TRIG_O         : out   std_logic
+    FPGA_DELAYED_TRIG_O         : out   std_logic
   );
 end entity DATATRACEBUFFER;
 
@@ -109,7 +109,7 @@ begin
       FPGA_TRIG_I  => FPGA_TRIG_I,
       FPGA_TRACE_I => FPGA_TRACE_I,
       FPGA_DOUT_O  => FPGA_DOUT_O,
-      FPGA_TRIG_O  => FPGA_TRIG_O
+      FPGA_DELAYED_TRIG_O  => FPGA_DELAYED_TRIG_O
     );
 
   TRG_MEM : process (CLK_I) is

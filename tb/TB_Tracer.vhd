@@ -73,7 +73,7 @@ begin
       FPGA_TRACE_I => trace,
       FPGA_STREAM_O => dout,
       FPGA_READ_I  => read,
-      FPGA_TRIG_O  => trig_o
+      FPGA_DELAYED_TRIG_O  => trig_o
     );
 
   CLK_PROCESS : process is

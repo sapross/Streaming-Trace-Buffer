@@ -53,7 +53,7 @@ module TraceLogger
    output logic [TRB_MAX_TRACES-1:0]  FPGA_STREAM_O,
    // Set to high after trigger event with delay. Usable for daisy-chaining.
    // Indicates whether data is valid in streaming mode.
-   output logic                       FPGA_TRIG_O
+   output logic                       FPGA_DELAYED_TRIG_O
 
    );
 
@@ -253,7 +253,7 @@ module TraceLogger
       .FPGA_WRITE_VALID_O   (FPGA_WRITE_VALID_O),
       .FPGA_READ_I          (FPGA_READ_I),
       .FPGA_STREAM_O        (FPGA_STREAM_O),
-      .FPGA_TRIG_O          (FPGA_TRIG_O)
+      .FPGA_DELAYED_TRIG_O          (FPGA_DELAYED_TRIG_O)
       );
 
 endmodule // TraceLogger

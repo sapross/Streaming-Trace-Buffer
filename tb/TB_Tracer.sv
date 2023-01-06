@@ -98,7 +98,7 @@ module TB_TRACER (/*AUTOARG*/ ) ;
                .FPGA_WRITE_VALID_O (write_valid),
                .FPGA_READ_I        (read),
                .FPGA_STREAM_O      (stream),
-               .FPGA_TRIG_O        (trg_out)
+               .FPGA_DELAYED_TRIG_O        (trg_out)
                );
 
    // Set control signals to default values and set reset signal.

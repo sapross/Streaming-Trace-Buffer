@@ -121,7 +121,7 @@ module TB_StreamTraceBuffer (/*AUTOARG*/ ) ;
       .FPGA_WRITE_VALID_O    (write_valid),
       .FPGA_READ_I           (read),
       .FPGA_STREAM_O         (stream),
-      .FPGA_TRIG_O           (trg_out)
+      .FPGA_DELAYED_TRIG_O           (trg_out)
       );
 
    // Trigger reset and set DUT inputs to defaults.
