@@ -1,0 +1,3 @@
+[submodule "top/risc_dbg_uart"]
+	path = top/riscv-debug
+	url = git@github.com:sapross/risc_dbg_uart.git
