@@ -7,7 +7,7 @@
 // Last Modified On: Sun Jan  1 18:25:23 2023
 // Update Count    : 0
 // Status          : Unknown, Use with caution!
-import DTB_PKG::*;
+`include "../lib/STB_PKG.svh"
 
 module StreamTraceBuffer
   (
@@ -17,11 +17,11 @@ module StreamTraceBuffer
    // Configuration & Status Interface
    input logic                        STATUS_READY_I,
    output logic                       STATUS_VALID_O,
-   output logic [$bits(status_t)-1:0] STATUS_O,
+   output logic [TRB_STATUS_BITS-1:0] STATUS_O,
 
    output logic                       CONTROL_READY_O,
    input logic                        CONTROL_VALID_I,
-   input logic [$bits(control_t)-1:0] CONTROL_I,
+   input logic [TRB_CONTROL_BITS-1:0] CONTROL_I,
 
    // Data IO Interface
    input logic                        DATA_READY_I,
@@ -40,7 +40,7 @@ module StreamTraceBuffer
    // Trace input
    input logic [TRB_MAX_TRACES-1:0]   FPGA_TRACE_I,
    // Write valid. Only relevant during streaming mode.
-   output logic                       FPGA_WRITE_VALID_O,
+   output logic                       FPGA_WRITE_READY_O,
 
    // Read signal for streaming mode, irrelevant during trace mode.
    input logic                        FPGA_READ_I,
@@ -68,7 +68,7 @@ module StreamTraceBuffer
    end
    assign status_change = redge_trigger[0] ^ redge_trigger[1];
 
-   RV_Interface #($bits(control_t), $bits(status_t))
+   RV_Interface #(TRB_CONTROL_BITS, TRB_STATUS_BITS)
    contrl_stat_intf
      (
       .CLK_I          (CLK_I),
@@ -174,12 +174,12 @@ module StreamTraceBuffer
       .FPGA_TRIG_I        (FPGA_TRIG_I),
 
       .FPGA_TRACE_I       (FPGA_TRACE_I),
-      .FPGA_WRITE_VALID_O (FPGA_WRITE_VALID_O),
+      .FPGA_WRITE_READY_O (FPGA_WRITE_READY_O),
 
       .FPGA_READ_I        (FPGA_READ_I),
 
       .FPGA_STREAM_O      (FPGA_STREAM_O),
-      .FPGA_DELAYED_TRIG_O        (FPGA_DELAYED_TRIG_O)
+      .FPGA_DELAYED_TRIG_O(FPGA_DELAYED_TRIG_O)
       );
 
 

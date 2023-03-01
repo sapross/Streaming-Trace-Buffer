@@ -8,7 +8,7 @@
 // Update Count    : 0
 // Status          : Unknown, Use with caution!
 
-import DTB_PKG::*;
+`include "../lib/STB_PKG.svh"
 
 module MemoryController (
                          input logic                      CLK_I,
@@ -42,6 +42,7 @@ module MemoryController (
    logic                    write_turn, read_turn;
    assign read_turn = ~ write_turn;
    assign RW_TURN_O = write_turn;
+   // System has write turn on turn = 0
    always_ff @(posedge CLK_I) begin
       if (!RST_NI) begin
          write_turn <= 0;
@@ -57,14 +58,21 @@ module MemoryController (
 
 
    function logic incmod_unequal(input int unsigned a, input int unsigned b);
-      return (a+1)%TRB_DEPTH != b;
+      int unsigned next;
+      next = ((a + 1) % TRB_DEPTH);
+      return (next != b);
    endfunction // incmod_unequal
 
    bit [TRB_ADDR_WIDTH-1:0]           log_rptr, log_wptr;
+   bit [TRB_ADDR_WIDTH-1:0]           log_wptr_next;
    assign log_rptr = LOGGER_READ_PTR_I;
    assign log_wptr = LOGGER_WRITE_PTR_I;
+   assign log_wptr_next = (log_wptr + 1) % TRB_DEPTH;
+
 
    bit [TRB_ADDR_WIDTH-1:0]           sys_rptr, sys_wptr;
+   bit [TRB_ADDR_WIDTH-1:0]           sys_wptr_next;
+   assign sys_wptr_next = (sys_wptr + 1) % TRB_DEPTH;
 
    logic                              log_read_allow;
    assign LOGGER_READ_ALLOW_O = log_read_allow;
@@ -82,27 +90,44 @@ module MemoryController (
    logic                              sys_write_valid;
 
 
-   // Logger can ignore system write pointer if in trace or write-only stream mode.
+   // Logger can ignore system write pointer if in trace or read-only stream mode.
    assign log_read_allow = MODE_I == trace_mode  ||
-                           MODE_I == w_stream_mode ||
+                           MODE_I == r_stream_mode ||
                            log_rptr != sys_wptr;
 
-   // Logger can ignore system read pointer if in trace mode or read-only stream mode.
+   // Logger can ignore system read pointer if in trace mode or write-only stream mode.
    assign log_write_allow = MODE_I == trace_mode ||
-                            MODE_I == r_stream_mode ||
-                            incmod_unequal(log_wptr, log_rptr);
+                            MODE_I == w_stream_mode ||
+                            (log_wptr_next != log_rptr);
 
    // Conversely, the system can ignore logger write pointer when in trace mode
    // with trigger event. Otherwise the system read pointer must be behind the logger
    // write pointer if not in an write-only mode.
-   assign sys_read_allow = MODE_I == trace_mode && TRG_EVENT_I ||
-                           MODE_I != w_stream_mode && sys_rptr != log_wptr;
+   always_comb begin
+      sys_read_allow = 0;
+      if (MODE_I == trace_mode) begin
+        sys_read_allow = TRG_EVENT_I & !read_turn;
+      end
+      else if(MODE_I != w_stream_mode) begin
+         if (sys_rptr != log_wptr) begin
+            sys_read_allow = !read_turn;
+         end
+      end
+   end
 
    // In write-only mode a collision with the system read pointer is irrelevant.
    // Only in RW-Stream mode does the potential pointer collision become relevant.
-   assign sys_write_allow = MODE_I == w_stream_mode ||
-                            MODE_I == rw_stream_mode && incmod_unequal(sys_wptr, sys_rptr);
-
+   always_comb begin
+      sys_write_allow = 0;
+      if (MODE_I == w_stream_mode) begin
+        sys_write_allow = !write_turn;
+      end
+      else if(MODE_I == rw_stream_mode) begin
+         if (sys_wptr_next != sys_rptr) begin
+            sys_write_allow = !write_turn;
+         end
+      end
+   end
 
    logic                              sys_pending_read;
    always_ff @(posedge CLK_I) begin : READ_POINTER_INC
@@ -114,7 +139,7 @@ module MemoryController (
          if (MODE_I == trace_mode && !TRG_EVENT_I) begin
             // In Trace-Mode, read pointer follows write pointer from Logger
             // until trigger event is registered.
-            sys_rptr <= (log_wptr + 1 ) % TRB_DEPTH;
+            sys_rptr <= log_wptr;
          end
          else begin
             // In either streaming mode or trace mode with trigger event,
@@ -137,13 +162,13 @@ module MemoryController (
          sys_wptr <= 0;
       end
       else begin
-         if (MODE_I) begin
-            // Writing is disabled when in Trace-Mode.
-            if (!write_turn) begin
-               if (WRITE_I) begin
-                  if (sys_write_allow && (sys_wptr + 1) % TRB_DEPTH != sys_rptr) begin
-                     sys_wptr <= (sys_wptr + 1) % TRB_DEPTH;
-                  end
+         if (!write_turn && WRITE_I) begin
+            if (sys_write_allow) begin
+               if ( MODE_I == rw_stream_mode && (sys_wptr + 1) % TRB_DEPTH != sys_rptr) begin
+                  sys_wptr <= (sys_wptr + 1) % TRB_DEPTH;
+               end
+               else if(MODE_I == w_stream_mode) begin
+                  sys_wptr <= (sys_wptr + 1) % TRB_DEPTH;
                end
             end
          end
@@ -185,7 +210,7 @@ module MemoryController (
          READ_DATA_O <= '0;
       end
       else begin
-         if(read_turn) begin
+         if(!read_turn) begin
             READ_DATA_O <= read_data;
          end
          else begin
@@ -195,6 +220,7 @@ module MemoryController (
    end
 
 
+`define SIM
 
 `ifndef SIM
    BlockRAM_1KB bram
@@ -228,6 +254,8 @@ module MemoryController (
       );
 `endif
 
-`include "../tb/TB_MemoryController_Assertions.svh"
+// `ifdef SIM
+//  `include "../tb/TB_MemoryController_Assertions.svh"
+// `endif;
 
 endmodule // MemoryController

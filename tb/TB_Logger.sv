@@ -31,7 +31,7 @@ module TB_LOGGER (/*AUTOARG*/ ) ;
    logic [TRB_ADDR_WIDTH-1:0] write_ptr;
    logic [TRB_WIDTH-1:0]      dword_out;
 
-   logic [$bits(trg_mode_t)-1:0] mode;
+   logic [TRB_MODE_BITS-1:0] mode;
    logic [TRB_NTRACE_BITS-1:0] num_traces;
    logic [$clog2(TRB_WIDTH)-1:0] event_pos;
    logic                         trg_event;

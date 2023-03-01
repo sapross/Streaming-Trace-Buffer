@@ -70,21 +70,30 @@ module RV_Interface
    // -----------------------------------------------------------------------
 
    logic pending_write;
-   assign DATA_O = WRITE_DATA_I;
-   assign WRITE_READY_O = pending_write;
+   assign WRITE_READY_O = WRITE_VALID_I & pending_write;
+   assign UPDATE_O = pending_write & WRITE_ENABLE_I;
 
+   always_ff @(posedge CLK_I) begin : REG_DATA_O
+      if(!RST_NI) begin
+         DATA_O <= '0;
+      end
+      else begin
+         if(WRITE_VALID_I) begin
+            DATA_O <= WRITE_DATA_I;
+         end
+      end
+   end
+
+   
    always_ff @(posedge CLK_I) begin : WRITE_PROC
       if(!RST_NI) begin
          pending_write <= 0;
-         UPDATE_O <= 0;
       end
       else begin
-         UPDATE_O <= 0;
-         if (WRITE_VALID_I && WRITE_ENABLE_I) begin
+         if (WRITE_VALID_I) begin
             pending_write <= 1;
          end
-         if (pending_write) begin
-            UPDATE_O <= 1;
+         if (pending_write && WRITE_ENABLE_I) begin
             pending_write <= 0;
          end
       end

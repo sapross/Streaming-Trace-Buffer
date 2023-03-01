@@ -8,7 +8,7 @@
 // Update Count    : 0
 // Status          : Unknown, Use with caution!
 
-import DTB_PKG::*;
+`include "../lib/STB_PKG.svh"
 
 module SimBRAM_1KB (
                     input logic                    clk,
@@ -33,7 +33,8 @@ module SimBRAM_1KB (
 
    always_ff @(posedge clk) begin
       ram[wr_addr] <= wr_data;
-      rd_data <= ram[rd_addr];
+
    end
+   assign rd_data = ram[rd_addr];
 
 endmodule // SimBRAM_1KB

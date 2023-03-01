@@ -7,7 +7,7 @@
 // Last Modified On: Thu Nov 24 13:09:49 2022
 // Update Count    : 0
 // Status          : Unknown, Use with caution!
-import DTB_PKG::*;
+`include "../lib/STB_PKG.svh"
 
 module Tracer (
 
@@ -46,8 +46,8 @@ module Tracer (
                input logic                          FPGA_TRIG_I,
                // Trace input
                input logic [TRB_MAX_TRACES-1:0]     FPGA_TRACE_I,
-               // Write valid. Only relevant during streaming mode.
-               output logic                         FPGA_WRITE_VALID_O,
+               // Write ready. Only relevant during streaming mode.
+               output logic                         FPGA_WRITE_READY_O,
 
                // Read signal for streaming mode, irrelevant during trace mode.
                input logic                          FPGA_READ_I,
@@ -134,25 +134,29 @@ module Tracer (
          trace <= '0;
          STORE_O <= 0;
          trace_pos <= 0;
-         FPGA_WRITE_VALID_O <= 1;
+         FPGA_WRITE_READY_O <= 1;
       end
       else if (start) begin
          STORE_O <= 0;
          // Store trace signals in trace register.
          trace[trace_pos +: TRB_MAX_TRACES] <= FPGA_TRACE_I;
          if (trace_pos < TRB_WIDTH - num_trc) begin
-            trace_pos <= (trace_pos + num_trc);
+            // Continously increment trace_pos if in trace-mode.
+            // Otherwise, FPGA_TRIG_I functions as a valid signal.
+            if(MODE_I == trace_mode || FPGA_TRIG_I == 1) begin
+              trace_pos <= (trace_pos + num_trc);
+            end
          end
          else begin
             // Only wrap trace_pos if store is permitted.
             // Also signal the FPGA-Side that new data cannot be accepted.
             if (STORE_PERM_I) begin
-               FPGA_WRITE_VALID_O <= 1;
+               FPGA_WRITE_READY_O <= 1;
                trace_pos <= 0;
                STORE_O <= 1;
             end
             else begin
-               FPGA_WRITE_VALID_O <= 0;
+               FPGA_WRITE_READY_O <= 0;
             end
          end
       end // else: !if(RST_I)

@@ -9,7 +9,8 @@
 // Update Count    : 0
 // Status          : Unknown, Use with caution!
 
-import DTB_PKG::*;
+`include "../lib/STB_PKG.svh"
+// `define CDC
 
 module TraceLogger
   (
@@ -17,9 +18,9 @@ module TraceLogger
    input logic                        CLK_I,
    input logic                        RST_NI,
 
-   input logic [$bits(control_t)-1:0] CONTROL_I,
+   input logic [TRB_CONTROL_BITS-1:0] CONTROL_I,
    input logic                        CONTROL_UPDATE_I,
-   output logic [$bits(status_t)-1:0] STATUS_O,
+   output logic [TRB_STATUS_BITS-1:0] STATUS_O,
 
    // Read & Write strobe. Indicates that a write operation
    // can be performed in the current cycle.
@@ -45,7 +46,7 @@ module TraceLogger
    // Trace input
    input logic [TRB_MAX_TRACES-1:0]   FPGA_TRACE_I,
    // Write valid. Only relevant during streaming mode.
-   output logic                       FPGA_WRITE_VALID_O,
+   output logic                       FPGA_WRITE_READY_O,
 
    // Read signal for streaming mode, irrelevant during trace mode.
    input logic                        FPGA_READ_I,
@@ -91,10 +92,10 @@ module TraceLogger
    // -----------------------------------------------------------------
    //  -- Data signals
    // Logger
-   logic [$bits(trg_mode_t)-1:0]                       log_mode;
+   logic [TRB_MODE_BITS-1:0]                       log_mode;
    bit [TRB_NTRACE_BITS-1:0]                           log_num_traces;
    // Tracer
-   logic [$bits(trg_mode_t)-1:0]                       trc_mode;
+   logic [TRB_MODE_BITS-1:0]                       trc_mode;
    bit [TRB_NTRACE_BITS-1:0]                           trc_num_traces;
    //  -- Synchronizing signal
    logic                                               log_control_update;
@@ -103,7 +104,7 @@ module TraceLogger
    logic                                               trc_control_update;
 
 `ifdef CDC
-   CDC_MCP_TOGGLE #(.WIDTH($bits(trg_mode_t) + TRB_NTRACE_BITS ))
+   CDC_MCP_TOGGLE #(.WIDTH(TRB_MODE_BITS + TRB_NTRACE_BITS ))
    cdc_control
      (
       .RST_A_NI (RST_NI),
@@ -205,7 +206,7 @@ module TraceLogger
    Logger log_1
      (
       .CLK_I           (CLK_I),
-      .RST_NI          (RST_NI),
+      .RST_NI          (!CONTROL_UPDATE_I),
       .CONTROL_I       (CONTROL_I),
       .STATUS_O        (STATUS_O),
       .RW_TURN_I       (RW_TURN_I),
@@ -250,7 +251,7 @@ module TraceLogger
       .FPGA_CLK_I           (FPGA_CLK_I),
       .FPGA_TRIG_I          (FPGA_TRIG_I),
       .FPGA_TRACE_I         (FPGA_TRACE_I),
-      .FPGA_WRITE_VALID_O   (FPGA_WRITE_VALID_O),
+      .FPGA_WRITE_READY_O   (FPGA_WRITE_READY_O),
       .FPGA_READ_I          (FPGA_READ_I),
       .FPGA_STREAM_O        (FPGA_STREAM_O),
       .FPGA_DELAYED_TRIG_O          (FPGA_DELAYED_TRIG_O)

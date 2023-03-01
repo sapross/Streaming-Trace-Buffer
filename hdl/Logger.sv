@@ -8,15 +8,15 @@
   // Update Count    : 0
   // Status          : Unknown, Use with caution!
 
-import DTB_PKG::*;
+`include "../lib/STB_PKG.svh"
 
 module Logger (
                // --- Interface Ports ---
                input logic                         CLK_I,
                input logic                         RST_NI,
 
-               input logic [$bits(control_t)-1:0]  CONTROL_I,
-               output logic [$bits(status_t)-1:0]  STATUS_O,
+               input logic [TRB_CONTROL_BITS-1:0]  CONTROL_I,
+               output logic [TRB_STATUS_BITS-1:0]  STATUS_O,
 
                // Read & Write strobe. Indicates that a write operation
                // can be performed in the current cycle.
@@ -128,9 +128,9 @@ module Logger (
          // trg_delay = 100 : Half the trace data if before and after the event (centered).
          // trg_delay = 000 : Entire trace contains data leading up to trace event.
          // Formular for the limit L:
-         // Let n := timer_stop, P := TRB_BITS, N := 2**timer_stop'length
-         // L = n/N * P - 1
-         hist_count <= ((control.trg_delay+1) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS );
+         // Let n := control.trg_delay, P := TRB_DEPTH, N := max(control.trg_delay)
+         // L = n/N * (P-1)
+         hist_count <= ((control.trg_delay) * (TRB_DEPTH-1)) / (2**TRB_DELAY_BITS-1);
          status.trg_event <= 0;
       end
       else begin
@@ -158,8 +158,19 @@ module Logger (
    logic                    pending_write;
 
    logic                    read_valid;
-   assign read_valid = READ_ALLOW_I
-                       && (read_ptr+1) % TRB_DEPTH != write_ptr;
+   always_comb begin
+      read_valid = 0;
+      if (READ_ALLOW_I) begin
+         if (control.trg_mode == w_stream_mode ) begin
+            read_valid = 1;
+         end
+         else begin
+            if ((read_ptr+1) % TRB_DEPTH != write_ptr) begin
+               read_valid = 1;
+            end
+         end
+      end
+   end
 
    // Writing becomes invalid if the next pointer value equals the read pointer or
    // the delayed trg_event is set.
@@ -181,9 +192,28 @@ module Logger (
    //    only in Trace-Mode.
    //  - Pointer collision of logger internal pointers are only relevant
    //    when in RW-Streaming mode.
-   assign write_valid = WRITE_ALLOW_I &&
-                        (control.trg_mode != rw_stream_mode || write_ptr != read_ptr) &&
-                        (control.trg_mode != trace_mode || !status.trg_event);
+   always_comb begin
+      write_valid = 0;
+      if (WRITE_ALLOW_I) begin
+         if (control.trg_mode == trace_mode) begin
+            //In Trace mode, block writing after delayed trigger event.
+            if (!status.trg_event) begin
+               write_valid = 1;
+            end
+         end
+         else if (control.trg_mode == rw_stream_mode) begin
+            //Logger pointer collisions only relevant in rw-mode
+            if (write_ptr != read_ptr) begin
+               write_valid = 1;
+            end
+         end
+         else if (control.trg_mode == r_stream_mode) begin
+            //Pointer collision irrelevant.
+            write_valid = 1;
+         end
+      end
+   end
+
 
    assign write = pending_write & RW_TURN_I & write_valid;
    always_ff @(posedge CLK_I) begin : WRITE_PROC

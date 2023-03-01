@@ -95,7 +95,7 @@ module TB_TRACER (/*AUTOARG*/ ) ;
                .FPGA_CLK_I         (clk),
                .FPGA_TRIG_I        (trg_in),
                .FPGA_TRACE_I       (trace),
-               .FPGA_WRITE_VALID_O (write_valid),
+               .FPGA_WRITE_READY_O (write_valid),
                .FPGA_READ_I        (read),
                .FPGA_STREAM_O      (stream),
                .FPGA_DELAYED_TRIG_O        (trg_out)
