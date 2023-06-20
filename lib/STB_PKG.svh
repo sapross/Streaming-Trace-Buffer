@@ -18,7 +18,7 @@ localparam integer unsigned  TRB_ADDR_WIDTH = 8;
 localparam integer unsigned  TRB_DEPTH = 32;
 
 localparam integer unsigned  TRB_MAX_TRACES = 16;
-localparam integer unsigned  TRB_NTRACE_BITS = $clog2($clog2(TRB_MAX_TRACES));
+localparam integer unsigned  TRB_NTRACE_BITS = $clog2($clog2(TRB_MAX_TRACES + 1));
 typedef enum logic[1:0]
              {
               trace_mode     = 2'b00,

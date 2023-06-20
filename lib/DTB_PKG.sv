@@ -12,10 +12,10 @@ package DTB_PKG;
    localparam integer unsigned  TRB_WIDTH = 32;
 
    localparam integer unsigned  TRB_ADDR_WIDTH = 8;
-   localparam integer unsigned  TRB_DEPTH = 32;
+   localparam integer unsigned  TRB_DEPTH = 256;
 
    localparam integer unsigned  TRB_MAX_TRACES = 16;
-   localparam integer unsigned  TRB_NTRACE_BITS = $clog2($clog2(TRB_MAX_TRACES));
+   localparam integer unsigned  TRB_NTRACE_BITS = $clog2($clog2(TRB_MAX_TRACES) + 1);
    typedef enum logic[1:0]
                 {
                  trace_mode     = 2'b00,
@@ -24,7 +24,7 @@ package DTB_PKG;
                  w_stream_mode  = 2'b11
                  } trg_mode_t;
 
-   localparam integer unsigned  TRB_DELAY_BITS = 8 - $bits(trg_mode_t) - TRB_NTRACE_BITS;
+   localparam integer unsigned  TRB_DELAY_BITS = 8 - 2 - TRB_NTRACE_BITS;
 
    typedef struct               packed {
       trg_mode_t                  trg_mode;
@@ -32,11 +32,7 @@ package DTB_PKG;
       logic [TRB_DELAY_BITS-1:0]  trg_delay;
    } control_t;
 
-   localparam                     control_t CONTROL_DEFAULT = '{
-                                                              trg_mode:trace_mode,
-                                                              trg_num_traces:0,
-                                                              trg_delay:'1
-                                                              };
+   localparam                     logic [2 + TRB_NTRACE_BITS + TRB_DELAY_BITS -1 :0] CONTROL_DEFAULT = '0;
 
 
    typedef struct                 packed {
@@ -46,6 +42,7 @@ package DTB_PKG;
       // bit [ $clog2(TRB_DEPTH)-1:0 ] event_addr;
    } status_t;
 
-   localparam                       status_t STATUS_DEFAULT = '{trg_event:0,event_pos:'0,zero:'0};
+   localparam                       status_t STATUS_DEFAULT = '0;
 
-endpackage : DTB_PKG // DTB_PKG
+
+   endpackage : DTB_PKG // DTB_PKG
