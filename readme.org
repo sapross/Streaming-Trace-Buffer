@@ -1,0 +1,2 @@
+* Streaming-Trace-Buffer
+Implementation of a Trace-Buffer which can be configured to allow bi-directional streaming of data from debug host to device.
