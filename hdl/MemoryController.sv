@@ -85,9 +85,9 @@ module MemoryController (
 
    // Signals indicating whether io has been read/written to memory
    // after a address change..
-   logic                              sys_read_valid;
+//   logic                              sys_read_valid;
 
-   logic                              sys_write_valid;
+//   logic                              sys_write_valid;
 
 
    // Logger can ignore system write pointer if in trace or read-only stream mode.

@@ -95,31 +95,31 @@ module TB_TraceDeserializer (  /*AUTOARG*/);
       end
     end
   end
-  localparam int NumRep = 2;
-  class WordPair;
-    rand bit [TRB_WIDTH-1:0] pair[NumRep];
-  endclass  // WordPair
 
   task automatic test_trace_serialization_over_exp_traces;
+    localparam int NumRep = 2;
     // Serial trace data to be deserialized.
-    WordPair serial_data;
+    logic [TRB_WIDTH-1:0] serial_data[NumRep];
 
     $display("[ %0t ] Test: Trace deserialization with varying number of traces.", $time);
 
-    for (int i = 0; i < NumRep; i++) begin
-      $display("[ %0t ] Test with %0d parallel traces.", $time, 2 ** i);
-      reset(i);
-      serial_data.randomize();
+    for (int partrc = 0; partrc < $clog2(TRB_MAX_TRACES) + 1; partrc++) begin
+      $display("[ %0t ] Test with %0d parallel traces.", $time, 2 ** partrc);
+      reset(partrc);
+      randomize(serial_data);
+      STORE_PERM_I <= 1;
       #CLK_PERIOD;
-      for (int j = 0; j < TRB_WIDTH; j = j + 2 ** EXP_TRACES_I) begin
-        TRACE_VALID_I = 1;
-        for (int k = 0; k < 2 ** EXP_TRACES_I; k++) begin
-          TRACE_I <= serial_data.pair[i][j+k];
+      RST_I <= 0;
+      for (int i = 0; i < NumRep; i++) begin
+        for (int j = 0; j < TRB_WIDTH; j = j + 2 ** EXP_TRACES_I) begin
+          TRACE_VALID_I = 1;
+          for (int k = 0; k < 2 ** EXP_TRACES_I; k++) begin
+            TRACE_I <= serial_data[i][j+k];
+          end
+          #CLK_PERIOD;
         end
-        #CLK_PERIOD;
+        sb_driver.insert(0, serial_data[i]);
       end
-      sb_driver.insert(0, serial_data.pair[i]);
-      ->ev_driver;
     end
   endtask  // test_trace_serialization_over_exp_traces
 

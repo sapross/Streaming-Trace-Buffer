@@ -7,7 +7,7 @@
 // Last Modified On: Thu Nov 24 13:09:49 2022
 // Update Count    : 0
 // Status          : Unknown, Use with caution!
-`include "../lib/STB_PKG.svh"
+`include "STB_PKG.svh"
 
 module TraceDeserializer (
 
@@ -39,7 +39,14 @@ module TraceDeserializer (
   logic [          TRB_WIDTH -1 : 0] trace_reg;
   bit   [     $clog2(TRB_WIDTH)-1:0] trace_pos;
   bit   [$clog2(TRB_MAX_TRACES)-1:0] num_traces;
-  assign num_traces = 2 ** EXP_TRACES_I;
+  always_comb begin
+    if (2 ** EXP_TRACES_I < TRB_MAX_TRACES) begin
+      num_traces = 2 ** EXP_TRACES_I;
+    end else begin
+      num_traces = TRB_MAX_TRACES;
+    end
+  end
+
   logic store_request;
 
   always_ff @(posedge CLK_I) begin : TRACE_CAPTURE_PROCESS

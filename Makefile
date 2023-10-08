@@ -146,10 +146,10 @@ $(addprefix $(work-dir)/, $(addsuffix _snapshot.wdb,$(TB_TOP))): $(addprefix $(w
 #==== WAVEFORM DRAWING ====#
 SNAPSHOT ?=
 .PHONY : gui
-waves : $(work-dir)/$(SNAPSHOT)
+gui : $(SNAPSHOT)
 	@echo
 	@echo "### OPENING WAVES ###"
-	cd $(work-dir) && xsim --gui $(SNAPSHOT)
+	xsim --gui $(SNAPSHOT)
 
 
 .PHONY : clean
